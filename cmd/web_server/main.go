@@ -66,6 +66,7 @@ func webby(w http.ResponseWriter, req *http.Request) {
 	defer outConn.Close()
 
 	msgChBox, err := hub.subscribe("job:1")
+	defer msgChBox.Unsubscribe()
 
 	for {
 		if msgChBox.Done() {
@@ -83,6 +84,8 @@ func monitor() {
 		
 		subscription = hub.GetSubscription(subscriptionName)
 
+		// TODO: Handle subscription is done
+		
 		message <- subscription.Read()
 		for subscriber := range subscription.subscribers() {
 			outCh = subscriber.ch()
