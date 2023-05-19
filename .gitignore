@@ -1,0 +1,10 @@
+
+.env
+.DS_Store
+  
+bin/*
+log/*
+file_storage/*
+
+.emacs.desktop
+.emacs.desktop.lock
