@@ -54,26 +54,79 @@ func root(w http.ResponseWriter, req *http.Request) {
 	renderer.Execute("index", ctx, req, w)
 }
 
+var hub := Hub{}
+
 func webby(w http.ResponseWriter, req *http.Request) {
-	c, err := upgrader.Upgrade(w, req, nil)
+	outConn, err := upgrader.Upgrade(w, req, nil)
 	if err != nil {
 		fmt.Printf("Error when upgrading webby: %s", err)
 		writeInteralServerError(w, "unable to upgrade to websocket protocol")
 		return
 	}
-	defer c.Close()
+	defer outConn.Close()
 
-	c.WriteMessage(websocket.TextMessage, []byte("Hello"))
-	c.WriteMessage(websocket.TextMessage, []byte("Mike"))
+	msgChBox, err := hub.subscribe("job:1")
+
+	for {
+		if msgChBox.Done() {
+			break
+		}
+
+		msg := msgChBox.Read()
+		outConn.WriteMessage(websocket.TextMessage, []byte(msg))
+	}
+}
+
+func monitor() {
+	for {
+		// This can be replaced with a first wait on the name of the subscription
+		// that has published something for the hub to publish.
+		for _, name := range hub.subscriptionNames() {
+			subscription = hub.GetSubscription(name)
+
+			message <- subscription.Read()
+			for subscriber := range subscription.subscribers() {
+				outCh = subscriber.ch()
+				outCh <- message
+			}
+		}
+	}
+}
+
+func launchTask() {
+	outCh := hub.createSubscription("job:1")
+
+	pause, err := time.ParseDuration("2s")
+	if err != nil {
+		log.Fatalf("Unable to parse duration: %s\n", err)
+	}
+
+	time.Sleep(pause)
+	outCh <- "Hello 1"
+	
+	time.Sleep(pause)
+	outCh <- "Hello 2"
+	
+	time.Sleep(pause)
+	outCh <- "Hello 3"
+	
+	time.Sleep(pause)
+	outCh <- "Hello 4"
+	
 }
 
 func start_webby(w http.ResponseWriter, req *http.Request) {
 	ctx := defaultCtx()
+
+	go launchTask()
+	
 	renderer.Execute("start_webby", ctx, req, w)
 }
 
 func main() {
 	fmt.Printf("Starting web server...\n")
+
+	hub.Init()
 	
 	renderer = render.New(&render.Config{
 		ViewPaths:     []string{ "web_app_views" },
