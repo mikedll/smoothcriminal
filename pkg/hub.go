@@ -203,6 +203,7 @@ func (h *Hub) RemoveSubscriber(name string, id string) error {
 		return errors.New(fmt.Sprintf("Unable to find subscriber with id: %s", id))
 	}
 
+	delete(h.Ids, id)
 	h.Subscribers[name] = append(h.Subscribers[name][:idx], h.Subscribers[name][idx+1:]...)
 	return nil
 }
