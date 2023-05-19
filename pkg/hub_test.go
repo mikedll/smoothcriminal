@@ -60,12 +60,42 @@ func TestHubChannelClose(t *testing.T) {
 	<-g2
 }
 
-func TestHub(t *testing.T) {
+func TestGetSubscription(t *testing.T) {
 	hub := &Hub{}
 	hub.Init()
 
 	hub.CreateSubscription("job:1")
 
-	messageBox := hub.GetSubscription("job:1")
-	t.Logf("Some sub, done=%t, value=%s", messageBox.Done(), messageBox.Read())
+	hubChannel := hub.GetSubscription("job:1")
+
+	assert.IsType(t, &HubChannel{}, hubChannel)
+}
+
+func TestGetSubscribers(t *testing.T) {
+	hub := &Hub{}
+	hub.Init()
+
+	initialSubscribers := hub.SubscribersFor("job:1")
+	assert.Empty(t, initialSubscribers)
+	
+	hub.CreateSubscription("job:1")
+
+	cli1, err := hub.Subscribe("job:1")
+	assert.Nil(t, err)
+	
+	cli2, err := hub.Subscribe("job:1")
+	assert.Nil(t, err)
+
+	subscribers := hub.SubscribersFor("job:1")
+
+	assert.Equal(t, subscribers[0].Id, cli1.Id)
+	assert.Equal(t, subscribers[1].Id, cli2.Id)
+
+	if _, ok := hub.Ids[cli1.Id]; !ok {
+		t.Fatalf("Failed to track key: %s\n", cli1.Id)
+	}
+
+	if _, ok := hub.Ids[cli2.Id]; !ok {
+		t.Fatalf("Failed to track key: %s\n", cli2.Id)
+	}
 }

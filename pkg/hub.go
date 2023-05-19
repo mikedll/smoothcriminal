@@ -1,7 +1,13 @@
 
 package pkg
 
+import (
+	"errors"
+	"github.com/google/uuid"
+)
+
 type HubChannel struct {
+	Id string
 	Name string
 	ClientPings chan bool
 	DoneCh chan bool
@@ -9,6 +15,8 @@ type HubChannel struct {
 }
 
 type Hub struct {
+	Ids map[string]bool
+	Subscribers map[string][]*HubChannel
 	Subscriptions map[string]*HubChannel
 }
 
@@ -58,6 +66,8 @@ func(hCh *HubChannel) Read() string {
 }
 
 func (h *Hub) Init() {
+	h.Ids = make(map[string]bool)
+	h.Subscribers = make(map[string][]*HubChannel)
 	h.Subscriptions = make(map[string]*HubChannel)
 }
 
@@ -69,4 +79,33 @@ func (h *Hub) CreateSubscription(name string) {
 
 func (h *Hub) GetSubscription(name string) *HubChannel {
 	return h.Subscriptions[name]
+}
+
+func (h *Hub) Subscribe(name string) (*HubChannel, error) {
+	if _, ok := h.Subscriptions[name]; !ok {
+		return nil, errors.New("no such subscription")
+	}
+
+	if _, ok := h.Subscribers[name]; !ok {
+		h.Subscribers[name] = []*HubChannel{}
+	}
+
+	nextUUID := uuid.New()
+	if _, ok := h.Ids[nextUUID.String()]; ok {
+		return nil, errors.New("UUID collision")
+	}
+
+	h.Ids[nextUUID.String()] = true
+	next := &HubChannel{Id: nextUUID.String()}
+	h.Subscribers[name] = append(h.Subscribers[name], next)
+
+	return next, nil
+}
+
+func (h *Hub) SubscribersFor(name string) []*HubChannel {
+	if _, ok := h.Subscribers[name]; !ok {
+		return []*HubChannel{}
+	}
+
+	return h.Subscribers[name]
 }
