@@ -66,6 +66,8 @@ func webby(w http.ResponseWriter, req *http.Request) {
 	defer outConn.Close()
 
 	msgChBox, err := hub.subscribe("job:1")
+
+	// this should both disable the box and remove the subscription from the hub.
 	defer msgChBox.Unsubscribe()
 
 	for {
@@ -87,15 +89,40 @@ func monitor() {
 		// TODO: Handle subscription is done
 		
 		message <- subscription.Read()
-		for subscriber := range subscription.subscribers() {
+		for subscriber := range subscription.subscribersFor("subscriptionName") {
+			if subscriber.Closed() {
+				// subscriber unsubscribed after we popped it off the array
+				continue
+			}
 			outCh = subscriber.ch()
 			outCh <- message
 		}
 	}
 }
 
+func easyMonitor {
+	waitForClient, err := time.ParseDuration("1s")
+	if err != nil {
+		log.Fatalf("Unable to parse duration: %s\n", err)
+	}
+
+	time.Sleep(waitForClient)
+	
+	subscription = hub.GetSubscription("job:1")
+	
+	message <- subscription.Read()
+	for subscriber := range subscription.subscribersFor("subscriptionName") {
+		if subscriber.Closed() {
+			// subscriber unsubscribed after we popped it off the array
+			continue
+		}
+		outCh = subscriber.ch()
+		outCh <- message
+	}
+}
+
 func launchTask() {
-	outCh := hub.createSubscription("job:1")
+	outCh := hub.CreateSubscription("job:1")
 
 	pause, err := time.ParseDuration("2s")
 	if err != nil {
