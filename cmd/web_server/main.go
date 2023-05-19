@@ -74,7 +74,7 @@ func start_webby(w http.ResponseWriter, req *http.Request) {
 
 func main() {
 	fmt.Printf("Starting web server...\n")
-
+	
 	renderer = render.New(&render.Config{
 		ViewPaths:     []string{ "web_app_views" },
 		DefaultLayout: "application",
