@@ -161,3 +161,29 @@ func TestRemoveSubscriber(t *testing.T) {
 	subscribersAfter = hub.SubscribersFor("job:1")
 	assert.Empty(t, subscribersAfter)	
 }
+
+func TestListen(t *testing.T) {
+	hub := &Hub{}
+	hub.Init()
+
+	g1 := make(chan bool)
+	g2 := make(chan bool)
+
+	// Listener
+	go func() {
+		hub.Listen()
+		g1 <- true
+	}()
+
+	// Job
+	go func() {
+		hub.PublishTo("job:1", "no subject")
+		hub.CreateSubscription("job:1")
+		hub.PublishTo("job:1", "something")
+		hub.ActivityFeed <- HubActivity{ActType: HubActShutdown}
+		g2 <- true
+	}()
+
+	<-g1
+	<-g2
+}

@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	HubActClose int = 0
-	HubActMessage   = 1
+	HubActSubDone int = 0
+	HubActMessage     = 1
+	HubActShutdown    = 2
 )
 
 type HubChannel struct {
@@ -138,12 +139,17 @@ func (h *Hub) SubscribersFor(name string) []*HubChannel {
 	return h.Subscribers[name]
 }
 
+//
+// This does not check for subscription existence, as that would
+// require a lock and slow things down. If the subscription does not
+// exist, the subcribers list will come back empty, and nothing will happen.
+//
 func (h *Hub) PublishTo(name string, message string) {
-	// Should send to activity feed as a message activity
-	// Should send to subscription message channel
+	h.ActivityFeed <- HubActivity{ActType: HubActMessage, Subscription: name, Message: message}
 }
 
 func (h *Hub) Listen() {
+	Loop:
 	for {
 		// this has to be generalized to an action feed, and the messages have to
 		// state what they're describing. this way, the subscribers can be cleaned
@@ -154,10 +160,13 @@ func (h *Hub) Listen() {
 		// TODO: Get rid of Subscription struct. It doesn't get us anything. We
 		// can just use the activity stream.
 		hubActivity := <-h.ActivityFeed
-		
-		// TODO: Handle subscription is done
 
-		if hubActivity.ActType == HubActMessage {
+		switch hubActivity.ActType {
+		case HubActShutdown:
+			break Loop
+		case HubActSubDone:
+			// TODO: Handle subscription is done
+		case HubActMessage:
 			for _, subscriber := range h.SubscribersFor(hubActivity.Subscription) {
 				if !subscriber.IsClientAlive() {
 					// this can potentially beat the activityFeed message, but the activity
@@ -192,3 +201,4 @@ func (h *Hub) RemoveSubscriber(name string, id string) error {
 	h.Subscribers[name] = append(h.Subscribers[name][:idx], h.Subscribers[name][idx+1:]...)
 	return nil
 }
+
