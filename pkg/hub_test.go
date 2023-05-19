@@ -19,6 +19,7 @@ func TestHubChannel(t *testing.T) {
 
 	hCh.ClientPing()
 	assert.Equal(t, hCh.Done(), false)
+	assert.Equal(t, hCh.Read(), "Hello")
 }
 
 func TestHubChannelClose(t *testing.T) {

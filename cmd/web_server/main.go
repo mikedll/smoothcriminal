@@ -101,6 +101,7 @@ func messagePublisher() {
 			if subscriber.ClientClosed() {
 				// this can potentially beat the activityFeed message, but the activity
 				// feed should just fail to find the subscriber in such a case, and continue.
+				// we should delete this person from the subscribers list.
 				continue
 			}
 			outCh = subscriber.ch()
