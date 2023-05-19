@@ -87,6 +87,8 @@ func messagePublisher() {
 		// this has to be generalized to an action feed, and the messages have to
 		// state what they're describing. this way, the subscribers can be cleaned
 		// up right away, instead of having to wait to see if there was a message.
+		// subscribers to topics should be followed with integer ids, so that we
+		// can see if we already removed them off.
 
 		subscriptionName <- hub.nameFeed
 		
