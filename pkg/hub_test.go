@@ -10,8 +10,21 @@ func TestHubChannel(t *testing.T) {
 	hCh := HubChannel{}
 	hCh.Init()
 
-	hCh.Send("Hello")
+	// Simulate job manager running and sending to client
+	go func() {
+		if hCh.IsClientAlive() {
+			hCh.Send("Hello")
+		}
+	}()
+
+	hCh.ClientPing()
 	assert.Equal(t, hCh.Done(), false)
+}
+
+func TestClose(t *testing.T) {
+	hCh := HubChannel{}
+
+	hCh.Init()
 }
 
 func TestHub(t *testing.T) {

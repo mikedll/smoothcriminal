@@ -71,6 +71,8 @@ func webby(w http.ResponseWriter, req *http.Request) {
 	defer msgChBox.Unsubscribe()
 
 	for {
+		msgChBox.ClientPing()
+		
 		if msgChBox.Done() {
 			break
 		}
@@ -80,8 +82,12 @@ func webby(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func monitor() {
+func messagePublisher() {
 	for {
+		// this has to be generalized to an action feed, and the messages have to
+		// state what they're describing. this way, the subscribers can be cleaned
+		// up right away, instead of having to wait to see if there was a message.
+
 		subscriptionName <- hub.nameFeed
 		
 		subscription = hub.GetSubscription(subscriptionName)
@@ -90,11 +96,9 @@ func monitor() {
 		
 		message <- subscription.Read()
 		for subscriber := range subscription.subscribersFor("subscriptionName") {
-			if subscriber.Closed() {
-				// perhaps we should use channels here. can have the subscriber
-				// send "true" on a bool channel to indicate it still wants something,
-				// and that can inform the Closed() function.
-				// subscriber unsubscribed after we popped it off the array
+			if subscriber.ClientClosed() {
+				// this can potentially beat the activityFeed message, but the activity
+				// feed should just fail to find the subscriber in such a case, and continue.
 				continue
 			}
 			outCh = subscriber.ch()
