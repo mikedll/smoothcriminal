@@ -29,7 +29,6 @@ func add(t *testing.T, list *[]int, lock semaphore, doneCh chan bool, i int) {
 	}
 
 	*list = append(*list, i)
-	t.Logf("Length of list in go routine: %d\n", len(*list))
 	
 	lock.V()
 	doneCh <- true
