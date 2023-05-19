@@ -91,6 +91,9 @@ func monitor() {
 		message <- subscription.Read()
 		for subscriber := range subscription.subscribersFor("subscriptionName") {
 			if subscriber.Closed() {
+				// perhaps we should use channels here. can have the subscriber
+				// send "true" on a bool channel to indicate it still wants something,
+				// and that can inform the Closed() function.
 				// subscriber unsubscribed after we popped it off the array
 				continue
 			}
