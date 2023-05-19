@@ -2,6 +2,7 @@
 package pkg
 
 import (
+	"errors"
 	"testing"
 	"github.com/stretchr/testify/assert"
 )
@@ -73,6 +74,29 @@ func TestGetSubscription(t *testing.T) {
 	assert.Equal(t, sub1, hubSub)
 }
 
+func TestActivityFeed(t *testing.T) {
+	hub := &Hub{}
+	hub.Init()
+
+	g1 := make(chan bool)
+	g2 := make(chan bool)
+	
+	// Listener
+	go func() {
+		<- hub.ActivityFeed
+		g1 <- true
+	}()
+
+	// Job
+	go func() {
+		hub.ActivityFeed <- HubActivity{ActType: HubActMessage}
+		g2 <- true
+	}()
+
+	<-g1
+	<-g2
+}
+
 func TestGetSubscribers(t *testing.T) {
 	hub := &Hub{}
 	hub.Init()
@@ -100,4 +124,38 @@ func TestGetSubscribers(t *testing.T) {
 	if _, ok := hub.Ids[cli2.Id]; !ok {
 		t.Fatalf("Failed to track key: %s\n", cli2.Id)
 	}
+}
+
+func TestRemoveSubscriber(t *testing.T) {
+	hub := &Hub{}
+	hub.Init()
+
+	hub.CreateSubscription("job:1")
+
+	cli1, err := hub.Subscribe("job:1")
+	assert.Nil(t, err)
+	
+	cli2, err := hub.Subscribe("job:1")
+	assert.Nil(t, err)
+
+	cli3, err := hub.Subscribe("job:1")
+	assert.Nil(t, err)
+
+	err = hub.RemoveSubscriber("job:1", "blah")
+	assert.Equal(t, err, errors.New("Unable to find subscriber with id: blah"))
+	
+	err = hub.RemoveSubscriber("job:1", cli2.Id)
+	assert.Nil(t, err)
+	subscribersAfter := hub.SubscribersFor("job:1")
+	assert.Equal(t, []*HubChannel{cli1, cli3}, subscribersAfter)
+
+	err = hub.RemoveSubscriber("job:1", cli1.Id)
+	assert.Nil(t, err)
+	subscribersAfter = hub.SubscribersFor("job:1")
+	assert.Equal(t, []*HubChannel{cli3}, subscribersAfter)
+
+	err = hub.RemoveSubscriber("job:1", cli3.Id)
+	assert.Nil(t, err)
+	subscribersAfter = hub.SubscribersFor("job:1")
+	assert.Empty(t, subscribersAfter)	
 }

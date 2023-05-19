@@ -2,8 +2,14 @@
 package pkg
 
 import (
+	"fmt"
 	"errors"
 	"github.com/google/uuid"
+)
+
+const (
+	HubActClose int = 0
+	HubActMessage   = 1
 )
 
 type HubChannel struct {
@@ -19,10 +25,17 @@ type HubSubscription struct {
 	MsgCh chan string
 }
 
+type HubActivity struct {
+	ActType int
+	Subscription string
+	Message string
+}
+
 type Hub struct {
 	Ids map[string]bool
 	Subscribers map[string][]*HubChannel
 	Subscriptions map[string]*HubSubscription
+	ActivityFeed chan HubActivity
 }
 
 func (hCh *HubChannel) Init() {
@@ -78,8 +91,10 @@ func (h *Hub) Init() {
 	h.Ids = make(map[string]bool)
 	h.Subscribers = make(map[string][]*HubChannel)
 	h.Subscriptions = make(map[string]*HubSubscription)
+	h.ActivityFeed = make(chan HubActivity)
 }
 
+// TODO: Guard with semaphore
 func (h *Hub) CreateSubscription(name string) *HubSubscription {
 	next := &HubSubscription{Name: name}
 	next.Init()
@@ -87,10 +102,12 @@ func (h *Hub) CreateSubscription(name string) *HubSubscription {
 	return next
 }
 
+// TODO: Guard with semaphore
 func (h *Hub) GetSubscription(name string) *HubSubscription {
 	return h.Subscriptions[name]
 }
 
+// TODO: Guard with semaphore
 func (h *Hub) Subscribe(name string) (*HubChannel, error) {
 	if _, ok := h.Subscriptions[name]; !ok {
 		return nil, errors.New("no such subscription")
@@ -112,6 +129,7 @@ func (h *Hub) Subscribe(name string) (*HubChannel, error) {
 	return next, nil
 }
 
+// TODO: Guard with semaphore
 func (h *Hub) SubscribersFor(name string) []*HubChannel {
 	if _, ok := h.Subscribers[name]; !ok {
 		return []*HubChannel{}
@@ -123,4 +141,54 @@ func (h *Hub) SubscribersFor(name string) []*HubChannel {
 func (h *Hub) PublishTo(name string, message string) {
 	// Should send to activity feed as a message activity
 	// Should send to subscription message channel
+}
+
+func (h *Hub) Listen() {
+	for {
+		// this has to be generalized to an action feed, and the messages have to
+		// state what they're describing. this way, the subscribers can be cleaned
+		// up right away, instead of having to wait to see if there was a message.
+		// subscribers to topics should be followed with integer ids, so that we
+		// can see if we already removed them off.
+
+		// TODO: Get rid of Subscription struct. It doesn't get us anything. We
+		// can just use the activity stream.
+		hubActivity := <-h.ActivityFeed
+		
+		// TODO: Handle subscription is done
+
+		if hubActivity.ActType == HubActMessage {
+			for _, subscriber := range h.SubscribersFor(hubActivity.Subscription) {
+				if !subscriber.IsClientAlive() {
+					// this can potentially beat the activityFeed message, but the activity
+					// feed should just fail to find the subscriber in such a case, and continue.
+					// we should delete this person from the subscribers list.
+					continue
+				}
+				subscriber.DoneCh <- false
+				subscriber.MsgCh <- hubActivity.Message
+			}
+		}
+	}
+}
+
+// TODO: Guard with semaphore
+func (h *Hub) RemoveSubscriber(name string, id string) error {
+	if _, ok := h.Subscriptions[name]; !ok {
+		return errors.New(fmt.Sprintf("No such subscription: %s", name))
+	}
+
+	idx := -1
+	for i, subscriber := range h.SubscribersFor(name) {
+		if subscriber.Id == id {
+			idx = i
+		}
+	}
+
+	if idx == -1 {
+		return errors.New(fmt.Sprintf("Unable to find subscriber with id: %s", id))
+	}
+
+	h.Subscribers[name] = append(h.Subscribers[name][:idx], h.Subscribers[name][idx+1:]...)
+	return nil
 }
