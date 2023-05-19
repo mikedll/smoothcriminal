@@ -9,9 +9,11 @@ import (
 	"strings"
 	"net/http"
 	"github.com/qor/render"
+	"github.com/gorilla/websocket"
 )
 
 var renderer *render.Render;
+var upgrader = websocket.Upgrader{}
 
 func defaultCtx() map[string]interface{} {
 	ctx := make(map[string]interface{})
@@ -38,9 +40,38 @@ func defaultCtx() map[string]interface{} {
 	return ctx
 }
 
+func writeError(w http.ResponseWriter, msg string, errorNum int) {
+	http.Error(w, msg, errorNum)
+}
+
+func writeInteralServerError(w http.ResponseWriter, msg string) {
+	fmt.Printf("Internal Server Error: %s\n", msg)
+	writeError(w, msg, http.StatusInternalServerError)
+}
+
 func root(w http.ResponseWriter, req *http.Request) {
 	ctx := defaultCtx()
 	renderer.Execute("index", ctx, req, w)
+}
+
+func webby(w http.ResponseWriter, req *http.Request) {
+	var err error
+	var c *websocket.Conn
+	c, err = upgrader.Upgrade(w, req, nil)
+	if err != nil {
+		fmt.Printf("Error when upgrading webby: %s", err)
+		writeInteralServerError(w, "unable to upgrade to websocket protocol")
+		return
+	}
+	defer c.Close()
+
+	c.WriteMessage(websocket.TextMessage, []byte("Hello"))
+	c.WriteMessage(websocket.TextMessage, []byte("Mike"))
+}
+
+func start_webby(w http.ResponseWriter, req *http.Request) {
+	ctx := defaultCtx()
+	renderer.Execute("start_webby", ctx, req, w)
 }
 
 func main() {
@@ -57,6 +88,8 @@ func main() {
 	http.Handle("/assets/", http.StripPrefix("/assets", assetsFs))
 	
 	http.Handle("/", http.HandlerFunc(root))
+	http.Handle("/webby", http.HandlerFunc(webby))
+	http.Handle("/start_webby", http.HandlerFunc(start_webby))
 
 	err := http.ListenAndServe("localhost:8081", nil)
 	if err != nil {

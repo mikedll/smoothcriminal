@@ -10,7 +10,29 @@ const alerts = () => {
   }
 }  
 
+const webSocket = () => {
+  const container = document.querySelector('.webby-container');
+
+  if(container !== null) {
+    console.log("running websocket");
+    const ws = new WebSocket("ws://localhost:8081/webby");
+
+    ws.addEventListener("message", (event) => {
+      const div = document.createElement("div");
+      div.appendChild(document.createTextNode(event.data));
+      container.appendChild(div);
+    });
+
+    ws.addEventListener("close", (event) => {
+      const div = document.createElement("div");
+      div.appendChild(document.createTextNode("Web socket closed."));
+      container.appendChild(div);
+    });
+  }
+};
+
 document.addEventListener("DOMContentLoaded", () => {
   console.log(`main.js executing`);
   alerts();
+  webSocket();
 });

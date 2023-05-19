@@ -7,6 +7,7 @@ require pkg v1.0.0
 require (
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/gorilla/css v1.0.0 // indirect
+	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/gosimple/slug v1.9.0 // indirect
 	github.com/jinzhu/gorm v1.9.15 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
