@@ -187,6 +187,7 @@ func TestListen(t *testing.T) {
 		<-jobContinue
 		
 		hub.PublishTo("job:1", "Hello Mike")		
+		hub.PublishTo("job:1", "Hello Carol")		
 		hub.ActivityFeed <- HubActivity{ActType: HubActShutdown}
 		g2 <- true
 	}()
@@ -200,13 +201,20 @@ func TestListen(t *testing.T) {
 		}
 
 		jobContinue <- true
-		
+
+		msges := []string{}
+
 		cli.ClientPing()
-		result := ""
 		if !cli.Done() {
-			result = cli.Read()
+			msges = append(msges, cli.Read())
 		}
-		assert.Equal(t, "Hello Mike", result)
+
+		cli.ClientPing()
+		if !cli.Done() {
+			msges = append(msges, cli.Read())
+		}		
+		
+		assert.Equal(t, []string{"Hello Mike", "Hello Carol"}, msges)
 
 		g3 <- true
 	}()
