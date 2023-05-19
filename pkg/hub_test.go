@@ -10,31 +10,54 @@ func TestHubChannel(t *testing.T) {
 	hCh := HubChannel{}
 	hCh.Init()
 
-	// Simulate job manager running and sending to client
+	g1 := make(chan bool)
+	g2 := make(chan bool)
+	
+	// Publisher
 	go func() {
 		if hCh.IsClientAlive() {
 			hCh.Send("Hello")
 		}
+		g1 <- true
 	}()
 
-	hCh.ClientPing()
-	assert.Equal(t, hCh.Done(), false)
-	assert.Equal(t, hCh.Read(), "Hello")
+	// Client
+	go func() {
+		hCh.ClientPing()
+		assert.Equal(t, hCh.Done(), false)
+		assert.Equal(t, hCh.Read(), "Hello")
+		g2 <- true
+	}()
+
+	<-g1
+	<-g2
 }
 
 func TestHubChannelClose(t *testing.T) {
 	hCh := HubChannel{}
 	hCh.Init()
+
+	g1 := make(chan bool)
+	g2 := make(chan bool)
 	
+	// Publisher
 	go func() {
+		ok := true
 		if hCh.IsClientAlive() {
-			hCh.Send("should not appear (and should not block)")
+			hCh.Send("should not be sent")
+			ok = false
 		}
+		g1 <- ok
 	}()
 
-	hCh.Close()
+	// Client
+	go func() {
+		hCh.Close()
+		g2 <- true
+	}()
 
-	// expect to finish
+	assert.Equal(t, <-g1, true)
+	<-g2
 }
 
 func TestHub(t *testing.T) {
