@@ -25,8 +25,8 @@ func TestHubChannel(t *testing.T) {
 	// Client
 	go func() {
 		hCh.ClientPing()
-		assert.Equal(t, hCh.Done(), false)
-		assert.Equal(t, hCh.Read(), "Hello")
+		assert.Equal(t, false, hCh.Done())
+		assert.Equal(t, "Hello", hCh.Read())
 		g2 <- true
 	}()
 
@@ -70,7 +70,7 @@ func TestGetSubscription(t *testing.T) {
 	hubSub := hub.GetSubscription("job:1")
 
 	assert.IsType(t, &HubSubscription{}, hubSub)
-	assert.Equal(t, sub1.Name, "job:1")
+	assert.Equal(t, "job:1", sub1.Name)
 	assert.Equal(t, sub1, hubSub)
 }
 
@@ -84,8 +84,8 @@ func TestActivityFeed(t *testing.T) {
 	// Listener
 	go func() {
 		act := <- hub.ActivityFeed
-		assert.Equal(t, act.ActType, HubActMessage)
-		assert.Equal(t, act.Subscription, "job:1")
+		assert.Equal(t, HubActMessage, act.ActType)
+		assert.Equal(t, "job:1", act.Subscription)
 		g1 <- true
 	}()
 
@@ -116,8 +116,8 @@ func TestGetSubscribers(t *testing.T) {
 
 	subscribers := hub.SubscribersFor("job:1")
 
-	assert.Equal(t, subscribers[0].Id, cli1.Id)
-	assert.Equal(t, subscribers[1].Id, cli2.Id)
+	assert.Equal(t, cli1.Id, subscribers[0].Id)
+	assert.Equal(t, cli2.Id, subscribers[1].Id)
 
 	if _, ok := hub.Ids[cli1.Id]; !ok {
 		t.Fatalf("Failed to track key: %s\n", cli1.Id)
@@ -168,22 +168,50 @@ func TestListen(t *testing.T) {
 
 	g1 := make(chan bool)
 	g2 := make(chan bool)
-
+	g3 := make(chan bool)
+	
 	// Listener
 	go func() {
 		hub.Listen()
 		g1 <- true
 	}()
 
+	clientGo := make(chan bool)
+	jobContinue := make(chan bool)
+	
 	// Job
 	go func() {
-		hub.PublishTo("job:1", "no subject")
 		hub.CreateSubscription("job:1")
-		hub.PublishTo("job:1", "something")
+
+		clientGo <- true
+		<-jobContinue
+		
+		hub.PublishTo("job:1", "Hello Mike")		
 		hub.ActivityFeed <- HubActivity{ActType: HubActShutdown}
 		g2 <- true
 	}()
 
+	// Client 1
+	go func() {
+		<-clientGo
+		cli, err := hub.Subscribe("job:1")
+		if err != nil {
+			t.Fatalf("Failed to subscribe to job:1")
+		}
+
+		jobContinue <- true
+		
+		cli.ClientPing()
+		result := ""
+		if !cli.Done() {
+			result = cli.Read()
+		}
+		assert.Equal(t, "Hello Mike", result)
+
+		g3 <- true
+	}()
+
 	<-g1
 	<-g2
+	<-g3
 }

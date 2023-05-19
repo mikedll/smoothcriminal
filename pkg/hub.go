@@ -125,6 +125,7 @@ func (h *Hub) Subscribe(name string) (*HubChannel, error) {
 
 	h.Ids[nextUUID.String()] = true
 	next := &HubChannel{Id: nextUUID.String()}
+	next.Init()
 	h.Subscribers[name] = append(h.Subscribers[name], next)
 
 	return next, nil
@@ -172,6 +173,8 @@ func (h *Hub) Listen() {
 					// this can potentially beat the activityFeed message, but the activity
 					// feed should just fail to find the subscriber in such a case, and continue.
 					// we should delete this person from the subscribers list.
+					
+					// fmt.Printf("Continuing because client is dead\n")
 					continue
 				}
 				subscriber.DoneCh <- false
@@ -179,6 +182,8 @@ func (h *Hub) Listen() {
 			}
 		}
 	}
+
+	// TODO: Clear out all clients for all subscriptions
 }
 
 // TODO: Guard with semaphore
