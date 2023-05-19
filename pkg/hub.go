@@ -27,7 +27,7 @@ func (hCh *HubChannel) IsClientAlive() bool {
 }
 
 //
-// Clients should close the connection, indicating they're done writing.
+// Clients should close the connection, indicating they're done reading.
 //
 func (hCh *HubChannel) Close() {
 	hCh.clientPings <- false
@@ -46,6 +46,9 @@ func (hCh *HubChannel) Send(message string) {
 	hCh.msgCh <- message
 }
 
+//
+// For clients to read. Indicates there are no more messages coming.
+//
 func (hCh *HubChannel) Done() bool {
 	return <-hCh.doneCh
 }

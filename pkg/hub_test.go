@@ -21,10 +21,19 @@ func TestHubChannel(t *testing.T) {
 	assert.Equal(t, hCh.Done(), false)
 }
 
-func TestClose(t *testing.T) {
+func TestHubChannelClose(t *testing.T) {
 	hCh := HubChannel{}
-
 	hCh.Init()
+	
+	go func() {
+		if hCh.IsClientAlive() {
+			hCh.Send("should not appear (and should not block)")
+		}
+	}()
+
+	hCh.Close()
+
+	// expect to finish
 }
 
 func TestHub(t *testing.T) {
