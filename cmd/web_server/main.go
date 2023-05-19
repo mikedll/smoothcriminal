@@ -79,16 +79,14 @@ func webby(w http.ResponseWriter, req *http.Request) {
 
 func monitor() {
 	for {
-		// This can be replaced with a first wait on the name of the subscription
-		// that has published something for the hub to publish.
-		for _, name := range hub.subscriptionNames() {
-			subscription = hub.GetSubscription(name)
+		subscriptionName <- hub.nameFeed
+		
+		subscription = hub.GetSubscription(subscriptionName)
 
-			message <- subscription.Read()
-			for subscriber := range subscription.subscribers() {
-				outCh = subscriber.ch()
-				outCh <- message
-			}
+		message <- subscription.Read()
+		for subscriber := range subscription.subscribers() {
+			outCh = subscriber.ch()
+			outCh <- message
 		}
 	}
 }
