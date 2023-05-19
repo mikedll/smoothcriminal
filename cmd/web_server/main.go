@@ -55,9 +55,7 @@ func root(w http.ResponseWriter, req *http.Request) {
 }
 
 func webby(w http.ResponseWriter, req *http.Request) {
-	var err error
-	var c *websocket.Conn
-	c, err = upgrader.Upgrade(w, req, nil)
+	c, err := upgrader.Upgrade(w, req, nil)
 	if err != nil {
 		fmt.Printf("Error when upgrading webby: %s", err)
 		writeInteralServerError(w, "unable to upgrade to websocket protocol")
@@ -75,7 +73,6 @@ func start_webby(w http.ResponseWriter, req *http.Request) {
 }
 
 func main() {
-
 	fmt.Printf("Starting web server...\n")
 
 	renderer = render.New(&render.Config{
