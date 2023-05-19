@@ -96,6 +96,7 @@ func (h *Hub) Init() {
 }
 
 // TODO: Guard with semaphore
+// TODO: Return error if subscription exists
 func (h *Hub) CreateSubscription(name string) *HubSubscription {
 	next := &HubSubscription{Name: name}
 	next.Init()
