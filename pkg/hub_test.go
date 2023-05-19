@@ -83,13 +83,15 @@ func TestActivityFeed(t *testing.T) {
 	
 	// Listener
 	go func() {
-		<- hub.ActivityFeed
+		act := <- hub.ActivityFeed
+		assert.Equal(t, act.ActType, HubActMessage)
+		assert.Equal(t, act.Subscription, "job:1")
 		g1 <- true
 	}()
 
 	// Job
 	go func() {
-		hub.ActivityFeed <- HubActivity{ActType: HubActMessage}
+		hub.ActivityFeed <- HubActivity{ActType: HubActMessage, Subscription: "job:1", Message: "Hello Mike"}
 		g2 <- true
 	}()
 
