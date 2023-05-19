@@ -95,7 +95,7 @@ func messagePublisher() {
 		subscription = hub.GetSubscription(subscriptionName)
 
 		// TODO: Handle subscription is done
-		
+
 		message <- subscription.Read()
 		for subscriber := range subscription.subscribersFor("subscriptionName") {
 			if subscriber.ClientClosed() {

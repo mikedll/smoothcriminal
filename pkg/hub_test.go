@@ -64,11 +64,13 @@ func TestGetSubscription(t *testing.T) {
 	hub := &Hub{}
 	hub.Init()
 
-	hub.CreateSubscription("job:1")
+	sub1 := hub.CreateSubscription("job:1")
 
-	hubChannel := hub.GetSubscription("job:1")
+	hubSub := hub.GetSubscription("job:1")
 
-	assert.IsType(t, &HubChannel{}, hubChannel)
+	assert.IsType(t, &HubSubscription{}, hubSub)
+	assert.Equal(t, sub1.Name, "job:1")
+	assert.Equal(t, sub1, hubSub)
 }
 
 func TestGetSubscribers(t *testing.T) {

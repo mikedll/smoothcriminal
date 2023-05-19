@@ -14,10 +14,15 @@ type HubChannel struct {
 	MsgCh chan string
 }
 
+type HubSubscription struct {
+	Name string
+	MsgCh chan string
+}
+
 type Hub struct {
 	Ids map[string]bool
 	Subscribers map[string][]*HubChannel
-	Subscriptions map[string]*HubChannel
+	Subscriptions map[string]*HubSubscription
 }
 
 func (hCh *HubChannel) Init() {
@@ -65,19 +70,24 @@ func(hCh *HubChannel) Read() string {
 	return <-hCh.MsgCh
 }
 
+func (hSub *HubSubscription) Init() {
+	hSub.MsgCh = make(chan string)
+}
+
 func (h *Hub) Init() {
 	h.Ids = make(map[string]bool)
 	h.Subscribers = make(map[string][]*HubChannel)
-	h.Subscriptions = make(map[string]*HubChannel)
+	h.Subscriptions = make(map[string]*HubSubscription)
 }
 
-func (h *Hub) CreateSubscription(name string) {
-	next := &HubChannel{Name: name}
+func (h *Hub) CreateSubscription(name string) *HubSubscription {
+	next := &HubSubscription{Name: name}
 	next.Init()
 	h.Subscriptions[name] = next
+	return next
 }
 
-func (h *Hub) GetSubscription(name string) *HubChannel {
+func (h *Hub) GetSubscription(name string) *HubSubscription {
 	return h.Subscriptions[name]
 }
 
@@ -108,4 +118,9 @@ func (h *Hub) SubscribersFor(name string) []*HubChannel {
 	}
 
 	return h.Subscribers[name]
+}
+
+func (h *Hub) PublishTo(name string, message string) {
+	// Should send to activity feed as a message activity
+	// Should send to subscription message channel
 }
