@@ -157,7 +157,7 @@ func (h *Hub) PublishTo(name string, message string) error {
 	return nil
 }
 
-func (h *Hub) InternalRemoveSubscription(name string, alreadyLocked bool) error {
+func (h *Hub) removeSubscription(name string, alreadyLocked bool) error {
 	if !alreadyLocked {
 		h.Lock.LockForWriting()
 	}
@@ -187,11 +187,11 @@ func (h *Hub) InternalRemoveSubscription(name string, alreadyLocked bool) error 
 	return nil
 }
 
-func (h *Hub) InternalRemoveAllSubscriptions() {
+func (h *Hub) removeAllSubscriptions() {
 	h.Lock.LockForWriting()
 
 	for name, _ := range h.Subscriptions {
-		err := h.InternalRemoveSubscription(name, true)
+		err := h.removeSubscription(name, true)
 		if err != nil {
 			fmt.Printf("Error when removing subscription %s: %s", name, err)
 		}
@@ -230,7 +230,7 @@ func (h *Hub) Listen() {
 			fmt.Printf("Hub got Shutdown\n")
 			break Loop
 		case HubActRemoveSub:
-			err := h.InternalRemoveSubscription(hubActivity.Subscription, false)
+			err := h.removeSubscription(hubActivity.Subscription, false)
 			if err != nil {
 				fmt.Printf("Error when removing subscription: %s\n", err)
 			}
@@ -265,7 +265,7 @@ func (h *Hub) Listen() {
 		}
 	}
 
-	h.InternalRemoveAllSubscriptions()
+	h.removeAllSubscriptions()
 }
 
 // TODO: Guard with semaphore
