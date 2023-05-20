@@ -4,7 +4,7 @@ package pkg
 import (
 	"errors"
 	"testing"
-	_ "time"
+	"time"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -171,30 +171,30 @@ func TestPublishToNonexistent(t *testing.T) {
 	assert.Equal(t, errors.New("Subscription does not exist: job:1"), err)
 }
 
-//
-// This is kind of convoluted. All we're really testing is that
-// the Client subscribes too late. We can't have it race with the job.
-// So we wait until Listen is done. That would not be the actual
-// flow worth testing in practice, but I can't think of a way to actually
-// test this. At least we test the cleanup of a subscription this way.
-//
 func TestListenMissedMessage(t *testing.T) {
 	hub := &Hub{}
 	hub.Init()
 
-	listenDone := make(chan bool)
-	jobDone := make(chan bool)
+	g1 := make(chan bool)
+	g2 := make(chan bool)
 	g3 := make(chan bool)
+
+	seekSubscription := make(chan bool)
+	subscriptionExists := make(chan bool)
+	detectMissingSubscription := make(chan bool)
 	
 	// Listener
 	go func() {
 		hub.Listen()
-		listenDone <- true
+		g1 <- true
 	}()
 	
 	// Job
 	go func() {
 		hub.CreateSubscription("job:1")
+
+		seekSubscription <- true
+		<-subscriptionExists
 		
 		err := hub.PublishTo("job:1", "Hello Mike")
 		assert.Nil(t, err)
@@ -203,13 +203,36 @@ func TestListenMissedMessage(t *testing.T) {
 
 		err = hub.RemoveSubscription("job:1")
 		assert.Nil(t, err)
+
+		detectMissingSubscription <- true
 		
-		jobDone <- true
+		g2 <- true
 	}()
 
 	// Client 1
 	go func() {
-		<-listenDone
+		<-seekSubscription
+
+		for {
+			relax, _ := time.ParseDuration("10ms")
+			time.Sleep(relax)
+			sub := hub.GetSubscription("job:1")
+			if sub != nil {
+				break
+			}
+		}
+
+		subscriptionExists <- true
+		<-detectMissingSubscription
+
+		for {
+			relax, _ := time.ParseDuration("10ms")
+			time.Sleep(relax)
+			sub := hub.GetSubscription("job:1")
+			if sub == nil {
+				break
+			}
+		}		
 		
 		_, err := hub.Subscribe("job:1")
 		assert.Equal(t, errors.New("Subscription does not exist: job:1"), err)
@@ -217,9 +240,10 @@ func TestListenMissedMessage(t *testing.T) {
 		g3 <- true
 	}()
 
-	<-jobDone
+	<-g2
 	hub.ActivityFeed <- HubActivity{ActType: HubActShutdown}
 	
+	<-g1
 	<-g3
 }
 
