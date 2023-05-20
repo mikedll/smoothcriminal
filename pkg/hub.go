@@ -112,7 +112,6 @@ func (h *Hub) GetSubscription(name string) *HubSubscription {
 	return h.Subscriptions[name]
 }
 
-// TODO: Guard with semaphore
 func (h *Hub) Subscribe(name string) (*HubChannel, error) {
 	h.Lock.LockForWriting()
 	
@@ -164,7 +163,6 @@ func (h *Hub) PublishTo(name string, message string) error {
 	return nil
 }
 
-// TODO: Protect with locks
 func (h *Hub) InternalRemoveSubscription(name string, alreadyLocked bool) error {
 	if !alreadyLocked {
 		h.Lock.LockForWriting()
@@ -238,9 +236,6 @@ func (h *Hub) Listen() {
 			fmt.Printf("Hub got Shutdown\n")
 			break Loop
 		case HubActRemoveSub:
-			// TODO: protect with lock.
-			// We can't use SubscribersFor because we need to
-			// wipe out the subscribers and subscription with an ownership of the lock.
 			err := h.InternalRemoveSubscription(hubActivity.Subscription, false)
 			if err != nil {
 				fmt.Printf("Error when removing subscription: %s\n", err)
