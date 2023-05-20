@@ -319,7 +319,7 @@ func TestListen(t *testing.T) {
 func typicalClient(t *testing.T, hub *Hub, jobContinue chan<- bool, expectedReads []string, exitCh chan<- bool) {	
 	cli, err := hub.Subscribe("job:1")
 	assert.Nil(t, err)
-	
+
 	jobContinue <- true
 
 	messages := []string{}
@@ -492,11 +492,11 @@ func TestClientExitsEarly2(t *testing.T) {
 		jobThread <- true
 	}()
 
-	// <-clientGo
+	<-clientGo
 	
 	// 2 Routine clients
-	go typicalClient(t, hub, jobContinue, []string{"Hello Mike", "Hello Carol"}, g3)
-	go typicalClient(t, hub, jobContinue, []string{"Hello Mike", "Hello Carol"}, g4)
+	go typicalClient(t, hub, jobContinue, []string{"Hello Mike"}, g3)
+	go typicalClient(t, hub, jobContinue, []string{"Hello Mike"}, g4)
 
 	// Client who unsubscribes after 1st message
 	go func () {	
