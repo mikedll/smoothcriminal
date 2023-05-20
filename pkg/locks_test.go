@@ -71,15 +71,20 @@ func TestOrder(t *testing.T) {
 	assert.Equal(t, "0123456789", result)
 }
 
-func TestWriteLock(t *testing.T) {
+//
+// Without working write lock, readers don't find "mike" in the list
+//
+func TestReadWriteWriterCanLock(t *testing.T) {
 
 	lock := &ReadWriteLock{}
 	lock.Init()
 	
 	writeAcquired := make(chan bool)
-	list := []string{}
+	list := []string{"hello"}
 
-	acquireWriteLockAndPause := func(lock *ReadWriteLock, list *[]string) {
+	g1 := make(chan bool)
+	
+	go func(lock *ReadWriteLock, list *[]string) {
 		lock.LockForWriting()
 		writeAcquired <- true
 
@@ -87,13 +92,12 @@ func TestWriteLock(t *testing.T) {
 		pause, _ := time.ParseDuration("10ms")
 		time.Sleep(pause)
 		
-		*list = append(*list, "hello")
+		*list = append(*list, "mike")
 
 		// readers can then proceed
 		lock.WritingUnlock()
-	}
-	
-	go acquireWriteLockAndPause(lock, &list)
+		g1 <- true
+	}(lock, &list)
 
 	<-writeAcquired
 
@@ -104,7 +108,7 @@ func TestWriteLock(t *testing.T) {
 		go func(lock *ReadWriteLock, list *[]string) {
 			lock.LockForReading()
 
-			assert.Equal(t, []string{"hello"}, *list)
+			assert.Equal(t, []string{"hello", "mike"}, *list)
 			
 			lock.ReadingUnlock()
 			nextCh <- true
@@ -114,4 +118,67 @@ func TestWriteLock(t *testing.T) {
 	for _, ch := range readers {
 		<-ch
 	}
+	<-g1
+}
+
+
+//
+// If readers can't block writer, they find "mike" in the list
+//
+func TestReadWriteReadersCanLock(t *testing.T) {
+	lock := &ReadWriteLock{}
+	lock.Init()
+	
+	list := []string{"hello"}
+
+	readLockAcquired := [](chan bool){
+		make(chan bool),
+		make(chan bool),
+		make(chan bool),
+	}
+
+	rDone := [](chan bool){
+		make(chan bool),
+		make(chan bool),
+		make(chan bool),
+	}
+
+	g2 := make(chan bool)
+	
+	acquireReadLock := func(lock *ReadWriteLock, list *[]string, idx int) {
+		lock.LockForReading()
+		readLockAcquired[idx] <- true
+
+		// let writer get stuck
+		pause, _ := time.ParseDuration("10ms")
+		time.Sleep(pause)
+		
+		assert.Equal(t, []string{"hello"}, *list)
+		
+		lock.ReadingUnlock()
+		rDone[idx] <- true
+	}
+	
+	for i := 0; i < 3; i+= 1 {
+		go acquireReadLock(lock, &list, i)
+	}
+
+	for i := 0; i < 3; i+= 1 {
+		<-readLockAcquired[i]
+	}
+	
+	go func(lock *ReadWriteLock, list *[]string) {
+		lock.LockForWriting()
+		
+		*list = append(*list, "mike")
+
+		// readers can then proceed
+		lock.WritingUnlock()
+		g2 <- true
+	}(lock, &list)
+
+	for i := 0; i < 3; i+= 1 {
+		<-rDone[i]
+	}
+	<-g2
 }
