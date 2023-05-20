@@ -8,9 +8,9 @@ import (
 )
 
 const (
-	HubActSubDone int = 0
-	HubActMessage     = 1
-	HubActShutdown    = 2
+	HubActRemoveSub int = 0
+	HubActMessage       = 1
+	HubActShutdown      = 2
 )
 
 type HubChannel struct {
@@ -112,7 +112,7 @@ func (h *Hub) GetSubscription(name string) *HubSubscription {
 // TODO: Guard with semaphore
 func (h *Hub) Subscribe(name string) (*HubChannel, error) {
 	if _, ok := h.Subscriptions[name]; !ok {
-		return nil, errors.New("no such subscription")
+		return nil, errors.New(fmt.Sprintf("Subscription does not exist: %s", name))
 	}
 
 	if _, ok := h.Subscribers[name]; !ok {
@@ -141,13 +141,51 @@ func (h *Hub) SubscribersFor(name string) []*HubChannel {
 	return h.Subscribers[name]
 }
 
+// TODO: Protect with lock
 //
 // This does not check for subscription existence, as that would
 // require a lock and slow things down. If the subscription does not
 // exist, the subcribers list will come back empty, and nothing will happen.
 //
-func (h *Hub) PublishTo(name string, message string) {
+func (h *Hub) PublishTo(name string, message string) error {
+	if _, ok := h.Subscriptions[name]; !ok {
+		return errors.New(fmt.Sprintf("Subscription does not exist: %s", name))
+	}
+	// fmt.Printf("PublishTo(): Sending into activity %p\n", h.ActivityFeed)
 	h.ActivityFeed <- HubActivity{ActType: HubActMessage, Subscription: name, Message: message}
+	return nil
+}
+
+// TODO: Protect with locks
+func (h *Hub) InternalRemoveSubscription(name string) error {
+	if _, ok := h.Subscriptions[name]; !ok {
+		return errors.New(fmt.Sprintf("Subscription does not exist: %s", name))
+	}
+	
+	if _, ok := h.Subscribers[name]; ok {
+		for _, subscriber := range h.Subscribers[name] {
+			if !subscriber.IsClientAlive() {
+				continue
+			}
+			subscriber.DoneCh <- true
+		}
+
+		delete(h.Subscribers, name)
+	}
+
+	delete(h.Subscriptions, name)
+	return nil
+}
+
+// TODO: Protect with locks
+func (h *Hub) RemoveSubscription(name string) error {
+	if _, ok := h.Subscriptions[name]; !ok {
+		return errors.New(fmt.Sprintf("Subscription does not exist: %s", name))
+	}
+
+	h.ActivityFeed <- HubActivity{ActType: HubActRemoveSub, Subscription: name}
+
+	return nil
 }
 
 func (h *Hub) Listen() {
@@ -161,13 +199,20 @@ func (h *Hub) Listen() {
 
 		// TODO: Get rid of Subscription struct. It doesn't get us anything. We
 		// can just use the activity stream.
+		// fmt.Printf("Listen(): reading an activity %p\n", h.ActivityFeed)
 		hubActivity := <-h.ActivityFeed
 
 		switch hubActivity.ActType {
 		case HubActShutdown:
 			break Loop
-		case HubActSubDone:
-			// TODO: Handle subscription is done
+		case HubActRemoveSub:
+			// TODO: protect with lock.
+			// We can't use SubscribersFor because we need to
+			// wipe out the subscribers and subscription with an ownership of the lock.
+			err := h.InternalRemoveSubscription(hubActivity.Subscription)
+			if err != nil {
+				fmt.Printf("Error when removing subscription: %s\n", err)
+			}
 		case HubActMessage:
 			for _, subscriber := range h.SubscribersFor(hubActivity.Subscription) {
 				if !subscriber.IsClientAlive() {
@@ -193,7 +238,7 @@ func (h *Hub) Listen() {
 // TODO: Guard with semaphore
 func (h *Hub) RemoveSubscriber(name string, id string) error {
 	if _, ok := h.Subscriptions[name]; !ok {
-		return errors.New(fmt.Sprintf("No such subscription: %s", name))
+		return errors.New(fmt.Sprintf("Subscription does not exist: %s", name))
 	}
 
 	idx := -1

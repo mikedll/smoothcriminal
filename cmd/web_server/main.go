@@ -65,6 +65,7 @@ func webby(w http.ResponseWriter, req *http.Request) {
 	}
 	defer outConn.Close()
 
+	// TODO: Handle subscription does not exist.
 	msgChBox, err := hub.subscribe("job:1")
 
 	// this should both disable the box and remove the subscription from the hub.

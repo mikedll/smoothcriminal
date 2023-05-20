@@ -4,6 +4,7 @@ package pkg
 import (
 	"errors"
 	"testing"
+	_ "time"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -162,12 +163,72 @@ func TestRemoveSubscriber(t *testing.T) {
 	assert.Empty(t, subscribersAfter)	
 }
 
+func TestPublishToNonexistent(t *testing.T) {
+	hub := &Hub{}
+	hub.Init()
+	
+	err := hub.PublishTo("job:1", "Hello Mike")
+	assert.Equal(t, errors.New("Subscription does not exist: job:1"), err)
+}
+
+//
+// This is kind of convoluted. All we're really testing is that
+// the Client subscribes too late. We can't have it race with the job.
+// So we wait until Listen is done. That would not be the actual
+// flow worth testing in practice, but I can't think of a way to actually
+// test this. At least we test the cleanup of a subscription this way.
+//
+func TestListenMissedMessage(t *testing.T) {
+	hub := &Hub{}
+	hub.Init()
+
+	listenDone := make(chan bool)
+	jobDone := make(chan bool)
+	g3 := make(chan bool)
+	
+	// Listener
+	go func() {
+		hub.Listen()
+		listenDone <- true
+	}()
+	
+	// Job
+	go func() {
+		hub.CreateSubscription("job:1")
+		
+		err := hub.PublishTo("job:1", "Hello Mike")
+		assert.Nil(t, err)
+		err = hub.PublishTo("job:1", "Hello Carol")
+		assert.Nil(t, err)		
+
+		err = hub.RemoveSubscription("job:1")
+		assert.Nil(t, err)
+		
+		jobDone <- true
+	}()
+
+	// Client 1
+	go func() {
+		<-listenDone
+		
+		_, err := hub.Subscribe("job:1")
+		assert.Equal(t, errors.New("Subscription does not exist: job:1"), err)
+
+		g3 <- true
+	}()
+
+	<-jobDone
+	hub.ActivityFeed <- HubActivity{ActType: HubActShutdown}
+	
+	<-g3
+}
+
 func TestListen(t *testing.T) {
 	hub := &Hub{}
 	hub.Init()
 
 	g1 := make(chan bool)
-	g2 := make(chan bool)
+	jobDone := make(chan bool)
 	g3 := make(chan bool)
 	
 	// Listener
@@ -180,7 +241,7 @@ func TestListen(t *testing.T) {
 	jobContinue := make(chan bool)
 	
 	// Job
-	go func() {
+	go func() {		
 		hub.CreateSubscription("job:1")
 
 		clientGo <- true
@@ -188,8 +249,7 @@ func TestListen(t *testing.T) {
 		
 		hub.PublishTo("job:1", "Hello Mike")		
 		hub.PublishTo("job:1", "Hello Carol")		
-		hub.ActivityFeed <- HubActivity{ActType: HubActShutdown}
-		g2 <- true
+		jobDone <- true
 	}()
 
 	// Client 1
@@ -218,8 +278,44 @@ func TestListen(t *testing.T) {
 
 		g3 <- true
 	}()
-
+	
+	<-jobDone
+	hub.ActivityFeed <- HubActivity{ActType: HubActShutdown}
+	
 	<-g1
-	<-g2
 	<-g3
 }
+
+/*
+func TestListenTwoClients(t *testing.T) {
+	hub := &Hub{}
+	hub.Init()
+
+	g1 := make(chan bool)
+	g2 := make(chan bool)
+	g3 := make(chan bool)
+	g4 := make(chan bool)
+
+	// Listener
+	go func() {
+		hub.Listen()
+		g1 <- true
+	}()
+
+
+	// Job
+	go func() {
+		hub.CreateSubscription("job:1")
+
+		clientGo <- true
+		<-jobContinue
+		
+		hub.PublishTo("job:1", "Hello Mike")		
+		hub.PublishTo("job:1", "Hello Carol")		
+		hub.ActivityFeed <- HubActivity{ActType: HubActShutdown}
+		g2 <- true
+	}()
+	
+	
+}
+*/
