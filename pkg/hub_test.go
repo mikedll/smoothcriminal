@@ -301,6 +301,9 @@ func TestListen(t *testing.T) {
 		
 		assert.Equal(t, []string{"Hello Mike", "Hello Carol"}, msges)
 
+		cli.ClientPing()
+		assert.True(t, cli.Done())
+		
 		g3 <- true
 	}()
 	

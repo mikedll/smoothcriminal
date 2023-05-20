@@ -6,5 +6,7 @@ bin/*
 log/*
 file_storage/*
 
+tmp/*
+     
 .emacs.desktop
 .emacs.desktop.lock
