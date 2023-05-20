@@ -132,7 +132,6 @@ func (h *Hub) Subscribe(name string) (*HubChannel, error) {
 	return next, nil
 }
 
-// TODO: Guard with semaphore
 func (h *Hub) SubscribersFor(name string) []*HubChannel {
 	h.Lock.LockForReading()
 	if _, ok := h.Subscribers[name]; !ok {
@@ -140,8 +139,7 @@ func (h *Hub) SubscribersFor(name string) []*HubChannel {
 		return []*HubChannel{}
 	}
 
-	cpy := make([]*HubChannel, len(h.Subscribers[name]))
-	copy(cpy, h.Subscribers[name])
+	cpy := append([]*HubChannel{}, h.Subscribers[name]...)
 	h.Lock.ReadingUnlock()
 	return cpy
 }
