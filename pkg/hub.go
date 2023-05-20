@@ -252,8 +252,8 @@ func (h *Hub) Listen() {
 					// and IsClientAlive will also block because the client is
 					// waiting for Listen() to pickup its message.
 					//
-					// Todo: Use a buffered channel. Permit Clients to move on
-					// with their usual loop if channel is full, but take advantage
+					// Rebuttal to Preceding, Todo: Use a buffered channel. Permit Clients
+					// to move on with their usual loop if channel is full, but take advantage
 					// of the optimization if we can.
 					
 					// fmt.Printf("  Continuing because client is dead\n")
