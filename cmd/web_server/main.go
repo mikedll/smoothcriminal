@@ -72,6 +72,14 @@ func webby(w http.ResponseWriter, req *http.Request) {
 	defer msgChBox.Unsubscribe()
 
 	for {
+		// Can check if outConn is closed, and send closed client message to
+		// hub if so. hub has to be using a buffered channel so that we can
+		// resume the normal loop if we can't send that message. We have to send
+		// a nil ping (Close()) even if our message goes through. if it doesn't,
+		// we Close and don't check Done(). We'd also have to introduce a var
+		// on HubChannel that remembers if Close() was received; that var
+		// should be returned in IsClientAlive().
+
 		msgChBox.ClientPing()
 		
 		if msgChBox.Done() {

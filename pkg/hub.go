@@ -222,6 +222,16 @@ func (h *Hub) Listen() {
 					// anyway so it's not a big deal. it's nice that there's only
 					// one way for a client to abort its connection.
 					//
+					// we can't have a "Client Disconnected" Activity because it will lead
+					// to deadlock. Suppose a Client sends "Client Disconnected" to the
+					// Activity feed while this for loop is executing. That send in
+					// the Client will block because Listen() is busy here,
+					// and IsClientAlive will also block because the client is
+					// waiting for Listen() to pickup its message.
+					//
+					// Todo: Use a buffered channel. Permit Clients to move on
+					// with their usual loop if channel is full, but take advantage
+					// of the optimization if we can.
 					
 					// fmt.Printf("Continuing because client is dead\n")
 					continue
