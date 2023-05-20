@@ -2,6 +2,7 @@
 package pkg
 
 import (
+	_ "fmt"
 	"errors"
 	"testing"
 	"time"
@@ -310,36 +311,64 @@ func TestListen(t *testing.T) {
 	<-g3
 }
 
-/*
-func TestListenTwoClients(t *testing.T) {
+func TestListen2Clients(t *testing.T) {
 	hub := &Hub{}
 	hub.Init()
 
 	g1 := make(chan bool)
-	g2 := make(chan bool)
+	jobThread := make(chan bool)
 	g3 := make(chan bool)
 	g4 := make(chan bool)
 
+	clientGo := make(chan bool)
+	jobContinue := make(chan bool, 2)
+	
 	// Listener
 	go func() {
 		hub.Listen()
 		g1 <- true
 	}()
 
-
 	// Job
 	go func() {
 		hub.CreateSubscription("job:1")
 
 		clientGo <- true
+		clientGo <- true
+		<-jobContinue
 		<-jobContinue
 		
 		hub.PublishTo("job:1", "Hello Mike")		
 		hub.PublishTo("job:1", "Hello Carol")		
-		hub.ActivityFeed <- HubActivity{ActType: HubActShutdown}
-		g2 <- true
+		jobThread <- true
 	}()
+
+	clientFunc := func(exitCh chan bool) {
+		<-clientGo
+		cli, err := hub.Subscribe("job:1")
+		assert.Nil(t, err)
+		
+		jobContinue <- true
+
+		for {
+			cli.ClientPing()
+			if(!cli.Done()) {
+				cli.Read()
+			} else {
+				break
+			}
+		}
+
+		exitCh <- true
+	}
+
+	go clientFunc(g3)
+	go clientFunc(g4)
+
+	<-jobThread
+	hub.ActivityFeed <- HubActivity{ActType: HubActShutdown}
 	
-	
+	<-g1
+	<-g3
+	<-g4
 }
-*/

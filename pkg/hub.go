@@ -37,6 +37,7 @@ type Hub struct {
 	Subscribers map[string][]*HubChannel
 	Subscriptions map[string]*HubSubscription
 	ActivityFeed chan HubActivity
+	Lock *ReadWriteLock
 }
 
 func (hCh *HubChannel) Init() {
@@ -93,6 +94,8 @@ func (h *Hub) Init() {
 	h.Subscribers = make(map[string][]*HubChannel)
 	h.Subscriptions = make(map[string]*HubSubscription)
 	h.ActivityFeed = make(chan HubActivity)
+	h.Lock = &ReadWriteLock{}
+	h.Lock.Init()
 }
 
 // TODO: Guard with semaphore
@@ -111,7 +114,10 @@ func (h *Hub) GetSubscription(name string) *HubSubscription {
 
 // TODO: Guard with semaphore
 func (h *Hub) Subscribe(name string) (*HubChannel, error) {
+	h.Lock.LockForWriting()
+	
 	if _, ok := h.Subscriptions[name]; !ok {
+		h.Lock.WritingUnlock()
 		return nil, errors.New(fmt.Sprintf("Subscription does not exist: %s", name))
 	}
 
@@ -121,6 +127,7 @@ func (h *Hub) Subscribe(name string) (*HubChannel, error) {
 
 	nextUUID := uuid.New()
 	if _, ok := h.Ids[nextUUID.String()]; ok {
+		h.Lock.WritingUnlock()
 		return nil, errors.New("UUID collision")
 	}
 
@@ -129,6 +136,7 @@ func (h *Hub) Subscribe(name string) (*HubChannel, error) {
 	next.Init()
 	h.Subscribers[name] = append(h.Subscribers[name], next)
 
+	h.Lock.WritingUnlock()
 	return next, nil
 }
 
@@ -157,8 +165,15 @@ func (h *Hub) PublishTo(name string, message string) error {
 }
 
 // TODO: Protect with locks
-func (h *Hub) InternalRemoveSubscription(name string) error {
+func (h *Hub) InternalRemoveSubscription(name string, alreadyLocked bool) error {
+	if !alreadyLocked {
+		h.Lock.LockForWriting()
+	}
+	
 	if _, ok := h.Subscriptions[name]; !ok {
+		if !alreadyLocked {
+			h.Lock.WritingUnlock()
+		}
 		return errors.New(fmt.Sprintf("Subscription does not exist: %s", name))
 	}
 	
@@ -174,7 +189,23 @@ func (h *Hub) InternalRemoveSubscription(name string) error {
 	}
 
 	delete(h.Subscriptions, name)
+	if !alreadyLocked {
+		h.Lock.WritingUnlock()
+	}
 	return nil
+}
+
+func (h *Hub) InternalRemoveAllSubscriptions() {
+	h.Lock.LockForWriting()
+
+	for name, _ := range h.Subscriptions {
+		err := h.InternalRemoveSubscription(name, true)
+		if err != nil {
+			fmt.Printf("Error when removing subscription %s: %s", name, err)
+		}
+	}
+
+	h.Lock.WritingUnlock()
 }
 
 // TODO: Protect with locks
@@ -204,17 +235,19 @@ func (h *Hub) Listen() {
 
 		switch hubActivity.ActType {
 		case HubActShutdown:
+			fmt.Printf("Hub got Shutdown\n")
 			break Loop
 		case HubActRemoveSub:
 			// TODO: protect with lock.
 			// We can't use SubscribersFor because we need to
 			// wipe out the subscribers and subscription with an ownership of the lock.
-			err := h.InternalRemoveSubscription(hubActivity.Subscription)
+			err := h.InternalRemoveSubscription(hubActivity.Subscription, false)
 			if err != nil {
 				fmt.Printf("Error when removing subscription: %s\n", err)
 			}
 		case HubActMessage:
 			for _, subscriber := range h.SubscribersFor(hubActivity.Subscription) {
+				// fmt.Printf("Publishing to client %s\n", subscriber.Id)
 				if !subscriber.IsClientAlive() {
 					// this has to be the only way for a Client to disconnect,
 					// which means some clients will stick around until a subscription
@@ -238,11 +271,12 @@ func (h *Hub) Listen() {
 				}
 				subscriber.DoneCh <- false
 				subscriber.MsgCh <- hubActivity.Message
+				// fmt.Printf("Done publishing to client %s\n", subscriber.Id)
 			}
 		}
 	}
 
-	// TODO: Clear out all clients for all subscriptions
+	h.InternalRemoveAllSubscriptions()
 }
 
 // TODO: Guard with semaphore
