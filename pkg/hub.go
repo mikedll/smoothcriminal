@@ -23,7 +23,6 @@ type HubChannel struct {
 
 type HubSubscription struct {
 	Name string
-	MsgCh chan string
 }
 
 type HubActivity struct {
@@ -85,10 +84,6 @@ func(hCh *HubChannel) Read() string {
 	return <-hCh.MsgCh
 }
 
-func (hSub *HubSubscription) Init() {
-	hSub.MsgCh = make(chan string)
-}
-
 func (h *Hub) Init() {
 	h.Ids = make(map[string]bool)
 	h.Subscribers = make(map[string][]*HubChannel)
@@ -102,7 +97,6 @@ func (h *Hub) Init() {
 // TODO: Return error if subscription exists
 func (h *Hub) CreateSubscription(name string) *HubSubscription {
 	next := &HubSubscription{Name: name}
-	next.Init()
 	h.Subscriptions[name] = next
 	return next
 }
