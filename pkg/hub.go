@@ -263,8 +263,7 @@ func (h *Hub) Listen() {
 					}
 					continue
 				}
-				subscriber.DoneCh <- false
-				subscriber.MsgCh <- hubActivity.Message
+				subscriber.Send(hubActivity.Message)
 				// fmt.Printf("Done publishing to client %s\n", subscriber.Id)
 			}
 		}
