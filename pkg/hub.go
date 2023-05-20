@@ -15,7 +15,6 @@ const (
 
 type HubChannel struct {
 	Id string
-	Name string
 	ClientPings chan bool
 	DoneCh chan bool
 	MsgCh chan string
@@ -135,11 +134,16 @@ func (h *Hub) Subscribe(name string) (*HubChannel, error) {
 
 // TODO: Guard with semaphore
 func (h *Hub) SubscribersFor(name string) []*HubChannel {
+	h.Lock.LockForReading()
 	if _, ok := h.Subscribers[name]; !ok {
+		h.Lock.ReadingUnlock()
 		return []*HubChannel{}
 	}
 
-	return h.Subscribers[name]
+	cpy := make([]*HubChannel, len(h.Subscribers[name]))
+	copy(cpy, h.Subscribers[name])
+	h.Lock.ReadingUnlock()
+	return cpy
 }
 
 // TODO: Protect with lock
@@ -254,7 +258,11 @@ func (h *Hub) Listen() {
 					// with their usual loop if channel is full, but take advantage
 					// of the optimization if we can.
 					
-					// fmt.Printf("Continuing because client is dead\n")
+					// fmt.Printf("  Continuing because client is dead\n")
+					err := h.RemoveSubscriber(hubActivity.Subscription, subscriber.Id)
+					if err != nil {
+						fmt.Printf("Error when removing subscriber: %s", err)
+					}
 					continue
 				}
 				subscriber.DoneCh <- false
@@ -267,25 +275,29 @@ func (h *Hub) Listen() {
 	h.removeAllSubscriptions()
 }
 
-// TODO: Guard with semaphore
 func (h *Hub) RemoveSubscriber(name string, id string) error {
+	h.Lock.LockForWriting()
+	
 	if _, ok := h.Subscriptions[name]; !ok {
+		h.Lock.WritingUnlock()
 		return errors.New(fmt.Sprintf("Subscription does not exist: %s", name))
 	}
 
 	idx := -1
-	for i, subscriber := range h.SubscribersFor(name) {
+	for i, subscriber := range h.Subscribers[name] {
 		if subscriber.Id == id {
 			idx = i
 		}
 	}
 
 	if idx == -1 {
+		h.Lock.WritingUnlock()
 		return errors.New(fmt.Sprintf("Unable to find subscriber with id: %s", id))
 	}
 
 	delete(h.Ids, id)
 	h.Subscribers[name] = append(h.Subscribers[name][:idx], h.Subscribers[name][idx+1:]...)
+	h.Lock.WritingUnlock()
 	return nil
 }
 

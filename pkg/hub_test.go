@@ -312,6 +312,29 @@ func TestListen(t *testing.T) {
 	
 	<-g1
 	<-g3
+
+	assert.Empty(t, hub.Subscribers)
+}
+
+func typicalClient(t *testing.T, hub *Hub, jobContinue chan<- bool, expectedReads []string, exitCh chan<- bool) {	
+	cli, err := hub.Subscribe("job:1")
+	assert.Nil(t, err)
+	
+	jobContinue <- true
+
+	messages := []string{}
+	for {
+		cli.ClientPing()
+		if(!cli.Done()) {
+			messages = append(messages, cli.Read())			
+		} else {
+			break
+		}
+	}
+
+	assert.Equal(t, expectedReads, messages)
+	
+	exitCh <- true
 }
 
 func TestListen2Clients(t *testing.T) {
@@ -337,7 +360,6 @@ func TestListen2Clients(t *testing.T) {
 		hub.CreateSubscription("job:1")
 
 		clientGo <- true
-		clientGo <- true
 		<-jobContinue
 		<-jobContinue
 		
@@ -346,27 +368,9 @@ func TestListen2Clients(t *testing.T) {
 		jobThread <- true
 	}()
 
-	clientFunc := func(exitCh chan bool) {
-		<-clientGo
-		cli, err := hub.Subscribe("job:1")
-		assert.Nil(t, err)
-		
-		jobContinue <- true
-
-		for {
-			cli.ClientPing()
-			if(!cli.Done()) {
-				cli.Read()
-			} else {
-				break
-			}
-		}
-
-		exitCh <- true
-	}
-
-	go clientFunc(g3)
-	go clientFunc(g4)
+	<-clientGo
+	go typicalClient(t, hub, jobContinue, []string{"Hello Mike", "Hello Carol"}, g3)
+	go typicalClient(t, hub, jobContinue, []string{"Hello Mike", "Hello Carol"}, g4)
 
 	<-jobThread
 	hub.ActivityFeed <- HubActivity{ActType: HubActShutdown}
@@ -374,4 +378,79 @@ func TestListen2Clients(t *testing.T) {
 	<-g1
 	<-g3
 	<-g4
+}
+
+func TestClientExitEarly(t *testing.T) {
+	hub := &Hub{}
+	hub.Init()
+
+	g1 := make(chan bool)
+	jobThread := make(chan bool)
+	g3 := make(chan bool)
+	g4 := make(chan bool)
+	g5 := make(chan bool)
+	
+	clientGo := make(chan bool)
+	jobContinue := make(chan bool, 1)
+	readyForUnsubscribe := make(chan bool)
+	
+	// Listener
+	go func() {
+		hub.Listen()
+		g1 <- true
+	}()
+
+	// Job
+	go func() {
+		hub.CreateSubscription("job:1")
+
+		clientGo <- true
+		<-jobContinue
+		<-jobContinue
+		<-jobContinue
+		
+		hub.PublishTo("job:1", "Hello Mike")
+
+		readyForUnsubscribe <- true
+
+		hub.PublishTo("job:1", "Hello Carol")
+		
+		jobThread <- true
+	}()
+
+	<-clientGo
+
+	// 2 Routine clients
+	go typicalClient(t, hub, jobContinue, []string{"Hello Mike", "Hello Carol"}, g3)
+	go typicalClient(t, hub, jobContinue, []string{"Hello Mike", "Hello Carol"}, g4)
+
+	// Client who unsubscribes after 1st message
+	go func () {	
+		cli, err := hub.Subscribe("job:1")
+		assert.Nil(t, err)
+		
+		jobContinue <- true
+
+		result := ""
+		cli.ClientPing()
+		if(!cli.Done()) {
+			result = cli.Read()
+		}
+		assert.Equal(t, "Hello Mike", result)
+
+		<-readyForUnsubscribe
+		
+		cli.Close()
+
+		g5 <- true
+	}()
+
+
+	<-jobThread
+	hub.ActivityFeed <- HubActivity{ActType: HubActShutdown}
+	
+	<-g1
+	<-g3
+	<-g4
+	<-g5
 }
