@@ -171,9 +171,12 @@ func (h *Hub) Listen() {
 		case HubActMessage:
 			for _, subscriber := range h.SubscribersFor(hubActivity.Subscription) {
 				if !subscriber.IsClientAlive() {
-					// this can potentially beat the activityFeed message, but the activity
-					// feed should just fail to find the subscriber in such a case, and continue.
-					// we should delete this person from the subscribers list.
+					// this has to be the only way for a Client to disconnect,
+					// which means some clients will stick around until a subscription
+					// is over, which we just have to live with. they'll be blocking
+					// anyway so it's not a big deal. it's nice that there's only
+					// one way for a client to abort its connection.
+					//
 					
 					// fmt.Printf("Continuing because client is dead\n")
 					continue
