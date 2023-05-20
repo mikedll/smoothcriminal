@@ -2,6 +2,7 @@
 package pkg
 
 import (
+	_ "fmt"
 	"strconv"
 	"time"
 	"testing"
@@ -68,4 +69,49 @@ func TestOrder(t *testing.T) {
 	}
 
 	assert.Equal(t, "0123456789", result)
+}
+
+func TestWriteLock(t *testing.T) {
+
+	lock := &ReadWriteLock{}
+	lock.Init()
+	
+	writeAcquired := make(chan bool)
+	list := []string{}
+
+	acquireWriteLockAndPause := func(lock *ReadWriteLock, list *[]string) {
+		lock.LockForWriting()
+		writeAcquired <- true
+
+		// wait for readers to get in line
+		pause, _ := time.ParseDuration("10ms")
+		time.Sleep(pause)
+		
+		*list = append(*list, "hello")
+
+		// readers can then proceed
+		lock.WritingUnlock()
+	}
+	
+	go acquireWriteLockAndPause(lock, &list)
+
+	<-writeAcquired
+
+	readers := [](chan bool){}
+	for i := 0; i < 3; i++ {
+		nextCh := make(chan bool)
+		readers = append(readers, nextCh)
+		go func(lock *ReadWriteLock, list *[]string) {
+			lock.LockForReading()
+
+			assert.Equal(t, []string{"hello"}, *list)
+			
+			lock.ReadingUnlock()
+			nextCh <- true
+		}(lock, &list)
+	}
+
+	for _, ch := range readers {
+		<-ch
+	}
 }
