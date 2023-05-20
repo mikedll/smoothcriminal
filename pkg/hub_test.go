@@ -384,7 +384,7 @@ func TestListen2Clients(t *testing.T) {
 // Presumably common scenario of a client exiting early and
 // missing some published messages.
 //
-func TestClientExitEarly(t *testing.T) {
+func TestClientExitsEarly(t *testing.T) {
 	hub := &Hub{}
 	hub.Init()
 
