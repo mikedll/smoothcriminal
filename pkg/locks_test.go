@@ -182,3 +182,46 @@ func TestReadWriteReadersCanLock(t *testing.T) {
 	}
 	<-g2
 }
+
+func TestReadWriteWriterBlocksWriter(t *testing.T) {
+	lock := &ReadWriteLock{}
+	lock.Init()
+
+	firstWriterIsIn := make(chan bool)
+	list := []string{"hello"}
+
+	g1 := make(chan bool)
+	g2 := make(chan bool)
+	
+	go func(lock *ReadWriteLock, list *[]string) {
+		lock.LockForWriting()
+		firstWriterIsIn <- true
+
+		// wait for other writer to get in line
+		pause, _ := time.ParseDuration("10ms")
+		time.Sleep(pause)
+		
+		*list = append(*list, "mike")
+
+		// readers can then proceed
+		lock.WritingUnlock()
+		g1 <- true
+	}(lock, &list)
+
+	<-firstWriterIsIn
+
+	go func(lock *ReadWriteLock, list *[]string) {
+		lock.LockForWriting()
+		
+		*list = append(*list, "how are you")
+
+		// readers can then proceed
+		lock.WritingUnlock()
+		g2 <- true
+	}(lock, &list)	
+
+	<-g1
+	<-g2
+
+	assert.Equal(t, []string{"hello", "mike", "how are you"}, list)
+}
