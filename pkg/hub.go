@@ -252,7 +252,9 @@ func (h *Hub) Listen() {
 					// and IsClientAlive will also block because the client is
 					// waiting for Listen() to pickup its message.
 					//
-					// Rebuttal to Preceding, Todo: Use the built-in function close().
+					// Rebuttal to Preceding, Todo: Use the built-in function close(),
+					// and this idiom: x, ok := <-c to detect closed. can even work for
+					// channels of strings.
 					// https://pkg.go.dev/builtin#close
 					// Permit Clients to move on with their usual loop if channel is full,
 					// but take advantage of the optimization if we can.
