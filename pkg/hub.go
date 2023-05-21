@@ -43,7 +43,7 @@ func (hCh *HubChannel) Init() {
 }
 
 //
-// Job manager should check this to see if client has sent
+// Hub Listen() should check this to see if client has sent
 // a ping and is ready for a message.
 //
 func (hCh *HubChannel) IsClientAlive() bool {
