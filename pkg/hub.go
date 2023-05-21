@@ -79,7 +79,6 @@ func (h *Hub) Init() {
 	h.Lock.Init()
 }
 
-// TODO: Return error if subscription exists
 func (h *Hub) CreateSubscription(name string) (*HubSubscription, error) {
 	h.Lock.LockForWriting()
 
@@ -95,9 +94,11 @@ func (h *Hub) CreateSubscription(name string) (*HubSubscription, error) {
 	return next, nil
 }
 
-// TODO: Guard with semaphore
 func (h *Hub) GetSubscription(name string) *HubSubscription {
-	return h.Subscriptions[name]
+	h.Lock.LockForReading()
+	sub := h.Subscriptions[name]
+	h.Lock.ReadingUnlock()
+	return sub
 }
 
 func (h *Hub) Subscribe(name string) (*HubChannel, error) {
