@@ -11,11 +11,11 @@ const alerts = () => {
 }  
 
 const webSocket = () => {
-  const container = document.querySelector('.webby-container');
+  const container = document.querySelector('.job-container');
 
   if(container !== null) {
     console.log("running websocket");
-    const ws = new WebSocket("ws://localhost:8081/webby");
+    const ws = new WebSocket(`ws://localhost:8081/job/${window.jobStr}/stream`);
 
     ws.addEventListener("message", (event) => {
       const div = document.createElement("div");

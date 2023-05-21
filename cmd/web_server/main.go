@@ -8,12 +8,17 @@ import (
 	"html/template"
 	"strings"
 	"net/http"
+	"regexp"
+	"strconv"
+	"time"
 	"github.com/qor/render"
 	"github.com/gorilla/websocket"
 )
 
 var renderer *render.Render;
 var upgrader = websocket.Upgrader{}
+var hub = &pkg.Hub{}
+var jobIdRegex = regexp.MustCompile(`jobs/(\d+)`)
 
 func defaultCtx() map[string]interface{} {
 	ctx := make(map[string]interface{})
@@ -49,50 +54,86 @@ func writeInteralServerError(w http.ResponseWriter, msg string) {
 	writeError(w, msg, http.StatusInternalServerError)
 }
 
-func root(w http.ResponseWriter, req *http.Request) {
-	ctx := defaultCtx()
-	renderer.Execute("index", ctx, req, w)
+func writeNotFound(w http.ResponseWriter) {
+	http.Error(w, "Not found", http.StatusNotFound)	
 }
 
-var hub := Hub{}
+func root(w http.ResponseWriter, r *http.Request) {
+	ctx := defaultCtx()
+	renderer.Execute("index", ctx, r, w)
+}
 
-func webby(w http.ResponseWriter, req *http.Request) {
-	outConn, err := upgrader.Upgrade(w, req, nil)
+func job(w http.ResponseWriter, r *http.Request) {
+	ctx := defaultCtx()
+
+	matches := jobIdRegex.FindStringSubmatch(r.URL.Path)
+	if matches == nil {
+		writeInteralServerError(w, "Unable to parse job id")
+		return
+	}
+
+	ctx["jobStr"] = "job:" + matches[1]
+	renderer.Execute("job", ctx, r, w)
+}
+
+func streamJob(w http.ResponseWriter, r *http.Request) {
+	matches := jobIdRegex.FindStringSubmatch(r.URL.Path)
+	if matches == nil {
+		writeInteralServerError(w, "Unable to parse job id")
+		return
+	}
+	jobStr := matches[1]
+
+	if r.URL.Path != "/jobs/" + jobStr + "/stream" {
+		writeNotFound(w)
+		return
+	}
+	
+	outConn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		fmt.Printf("Error when upgrading webby: %s", err)
+		fmt.Printf("Error when upgrading to web socket: %s", err)
 		writeInteralServerError(w, "unable to upgrade to websocket protocol")
 		return
 	}
 	defer outConn.Close()
 
 	// TODO: Handle subscription does not exist.
-	msgChBox, err := hub.subscribe("job:1")
-
-	// this should both disable the box and remove the subscription from the hub.
-	defer msgChBox.Unsubscribe()
+	cli, err := hub.Subscribe(jobStr)
+	if err != nil {
+		fmt.Printf("Error when subscribing: %s\n", err)
+		return
+	}
 
 	for {
-		// Can check if outConn is closed, and send closed client message to
-		// hub if so. hub has to be using a buffered channel so that we can
-		// resume the normal loop if we can't send that message. We have to send
-		// a nil ping (Close()) even if our message goes through. if it doesn't,
-		// we Close and don't check Done(). We'd also have to introduce a var
-		// on HubChannel that remembers if Close() was received; that var
-		// should be returned in IsClientAlive().
-
-		msgChBox.ClientPing()
-		
-		if msgChBox.Done() {
+		cli.ClientPing()
+		if m, ok := <- cli.MsgCh; ok {
+			
+			err := outConn.WriteMessage(websocket.TextMessage, []byte(m))
+			if err != nil {
+				fmt.Printf("Unable to write message: %s\n", err)
+				// this is how we detect that client closed at this time lol.
+				cli.Close()
+				removeCmd := pkg.HubCommand{CmdType: pkg.HubCmdRemoveSubscriber, Subscription: jobStr, SubscriberId: cli.Id}
+				select {
+				case hub.CommandCh <- removeCmd:
+				default:
+				}
+			}
+		} else {
+			// Subscription was closed
 			break
-		}
-
-		msg := msgChBox.Read()
-		outConn.WriteMessage(websocket.TextMessage, []byte(msg))
+		}			
 	}
 }
 
-func launchTask() {
-	outCh := hub.CreateSubscription("job:1")
+func runJob(jobId int) {
+	jobStr := "job:" + strconv.Itoa(jobId)
+
+	_, err := hub.CreateSubscription(jobStr)
+	if err != nil {
+		fmt.Printf("Unable to create subscription: %s\n", err)
+		return
+	}
 
 	pause, err := time.ParseDuration("2s")
 	if err != nil {
@@ -100,24 +141,44 @@ func launchTask() {
 	}
 
 	time.Sleep(pause)
-	outCh <- "Hello 1"
+	hub.PublishTo(jobStr, "Hello 1")
 	
 	time.Sleep(pause)
-	outCh <- "Hello 2"
+	hub.PublishTo(jobStr, "Hello 2")
 	
 	time.Sleep(pause)
-	outCh <- "Hello 3"
+	hub.PublishTo(jobStr, "Hello 3")
 	
 	time.Sleep(pause)
-	outCh <- "Hello 4"	
+	hub.PublishTo(jobStr, "Hello 4")
 }
 
-func start_webby(w http.ResponseWriter, req *http.Request) {
-	ctx := defaultCtx()
+func createJob(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeInteralServerError(w, "Method not supported at this URL")
+		return
+	}
 
-	go launchTask()
-	
-	renderer.Execute("start_webby", ctx, req, w)
+	if err := r.ParseForm(); err != nil {
+		writeInteralServerError(w, "Unable to parse form data")
+		return
+	}
+
+	jobId, err := strconv.Atoi(r.FormValue("id"))
+	if err != nil {
+		writeInteralServerError(w, "Unable to parse job id")
+		return
+	}
+
+	id := strconv.Itoa(jobId)
+	if sub := hub.GetSubscription("job:" + id); sub != nil {
+		http.Redirect(w, r, r.URL.Host + "/jobs/" + id, 302)
+		return
+	}
+
+	go runJob(jobId)
+
+	http.Redirect(w, r, r.URL.Host + "/jobs/" + id, 302)
 }
 
 func main() {
@@ -135,8 +196,8 @@ func main() {
 	http.Handle("/assets/", http.StripPrefix("/assets", assetsFs))
 	
 	http.Handle("/", http.HandlerFunc(root))
-	http.Handle("/webby", http.HandlerFunc(webby))
-	http.Handle("/start_webby", http.HandlerFunc(start_webby))
+	http.Handle("/jobs", http.HandlerFunc(createJob))
+	http.Handle("/jobs/", http.HandlerFunc(job))
 
 	err := http.ListenAndServe("localhost:8081", nil)
 	if err != nil {
