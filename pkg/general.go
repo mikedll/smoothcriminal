@@ -10,6 +10,8 @@ import (
 var Debug = false
 var Env string
 
+type Empty struct {}
+
 func fileExists(filename string) bool {
     info, err := os.Stat(filename)
     if os.IsNotExist(err) {

@@ -1,8 +1,7 @@
 
 package pkg
 
-type empty struct {}
-type semaphore chan empty
+type semaphore chan Empty
 type ReadWriteLock struct {
 	ServiceQueue semaphore
 	ReaderCountLock semaphore
@@ -11,8 +10,7 @@ type ReadWriteLock struct {
 }
 
 func (s semaphore) P() {
-	e := empty{}
-	s <- e
+	s <- Empty{}
 }
 
 func (s semaphore) V() {
