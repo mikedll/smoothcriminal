@@ -15,8 +15,7 @@ const (
 
 type HubChannel struct {
 	Id string
-	ClientPings chan bool
-	DoneCh chan bool
+	ClientPings chan Empty
 	MsgCh chan string
 }
 
@@ -39,8 +38,7 @@ type Hub struct {
 }
 
 func (hCh *HubChannel) Init() {
-	hCh.ClientPings = make(chan bool)
-	hCh.DoneCh = make(chan bool)
+	hCh.ClientPings = make(chan Empty)
 	hCh.MsgCh = make(chan string)
 }
 
@@ -49,14 +47,15 @@ func (hCh *HubChannel) Init() {
 // a ping and is ready for a message.
 //
 func (hCh *HubChannel) IsClientAlive() bool {
-	return <-hCh.ClientPings
+	_, ok := <-hCh.ClientPings
+	return ok
 }
 
 //
 // Clients should close the connection, indicating they're done reading.
 //
 func (hCh *HubChannel) Close() {
-	hCh.ClientPings <- false
+	close(hCh.ClientPings)
 }
 
 //
@@ -64,23 +63,11 @@ func (hCh *HubChannel) Close() {
 // or done indicator.
 //
 func (hCh *HubChannel) ClientPing() {
-	hCh.ClientPings <- true
+	hCh.ClientPings <- Empty{}
 }
 
 func (hCh *HubChannel) Send(message string) {
-	hCh.DoneCh <- false
 	hCh.MsgCh <- message
-}
-
-//
-// For clients to read. Indicates there are no more messages coming.
-//
-func (hCh *HubChannel) Done() bool {
-	return <-hCh.DoneCh
-}
-
-func(hCh *HubChannel) Read() string {
-	return <-hCh.MsgCh
 }
 
 func (h *Hub) Init() {
@@ -172,12 +159,6 @@ func (h *Hub) removeSubscription(name string, alreadyLocked bool) error {
 	}
 	
 	if _, ok := h.Subscribers[name]; ok {
-		for _, subscriber := range h.Subscribers[name] {
-			if subscriber.IsClientAlive() {
-				subscriber.DoneCh <- true
-			}
-		}
-
 		delete(h.Subscribers, name)
 	}
 
@@ -238,29 +219,9 @@ func (h *Hub) Listen() {
 		case HubActMessage:
 			for _, subscriber := range h.SubscribersFor(hubActivity.Subscription) {
 				// fmt.Printf("Publishing to client %s\n", subscriber.Id)
-				if !subscriber.IsClientAlive() {
-					// this has to be the only way for a Client to disconnect,
-					// which means some clients will stick around until a subscription
-					// is over, which we just have to live with. they'll be blocking
-					// anyway so it's not a big deal. it's nice that there's only
-					// one way for a client to abort its connection.
-					//
-					// we can't have a "Client Disconnected" Activity because it will lead
-					// to deadlock. Suppose a Client sends "Client Disconnected" to the
-					// Activity feed while this for loop is executing. That send in
-					// the Client will block because Listen() is busy here,
-					// and IsClientAlive will also block because the client is
-					// waiting for Listen() to pickup its message.
-					//
-					// Rebuttal to Preceding, Todo: Use the built-in function close(),
-					// and this idiom: x, ok := <-c to detect closed. can even work for
-					// channels of strings.
-					// https://pkg.go.dev/builtin#close
-					// Permit Clients to move on with their usual loop if channel is full,
-					// but take advantage of the optimization if we can.
-					
+				if !subscriber.IsClientAlive() {					
 					// fmt.Printf("  Continuing because client is dead\n")
-					err := h.RemoveSubscriber(hubActivity.Subscription, subscriber.Id)
+					err := h.removeSubscriber(hubActivity.Subscription, subscriber.Id)
 					if err != nil {
 						fmt.Printf("Error when removing subscriber: %s", err)
 					}
@@ -275,7 +236,7 @@ func (h *Hub) Listen() {
 	h.removeAllSubscriptions()
 }
 
-func (h *Hub) RemoveSubscriber(name string, id string) error {
+func (h *Hub) removeSubscriber(name string, id string) error {
 	h.Lock.LockForWriting()
 	
 	if _, ok := h.Subscriptions[name]; !ok {

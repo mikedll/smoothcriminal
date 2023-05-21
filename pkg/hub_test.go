@@ -27,8 +27,9 @@ func TestHubChannel(t *testing.T) {
 	// Client
 	go func() {
 		hCh.ClientPing()
-		assert.Equal(t, false, hCh.Done())
-		assert.Equal(t, "Hello", hCh.Read())
+		m, ok := <-hCh.MsgCh
+		assert.True(t, ok)
+		assert.Equal(t, "Hello", m)
 		g2 <- true
 	}()
 
@@ -136,32 +137,31 @@ func TestRemoveSubscriber(t *testing.T) {
 
 	hub.CreateSubscription("job:1")
 
-	cli1, err := hub.Subscribe("job:1")
-	assert.Nil(t, err)
-	
-	cli2, err := hub.Subscribe("job:1")
+	cli, err := hub.Subscribe("job:1")
 	assert.Nil(t, err)
 
-	cli3, err := hub.Subscribe("job:1")
+	cli.Close()
+
+	cli, err = hub.Subscribe("job:1")
 	assert.Nil(t, err)
 
-	err = hub.RemoveSubscriber("job:1", "blah")
-	assert.Equal(t, err, errors.New("Unable to find subscriber with id: blah"))
+	cli.Close()
+
+	g1 := make(chan Empty)
 	
-	err = hub.RemoveSubscriber("job:1", cli2.Id)
-	assert.Nil(t, err)
+	go func() {
+		hub.Listen()
+		g1 <- Empty{}
+	}()
+	
+	// will call removeSubscriber on both clients
+	hub.PublishTo("job:1", "Hello")
+	hub.ActivityFeed <- HubActivity{ActType: HubActShutdown}
+	
+	<-g1
+	
 	subscribersAfter := hub.SubscribersFor("job:1")
-	assert.Equal(t, []*HubChannel{cli1, cli3}, subscribersAfter)
-
-	err = hub.RemoveSubscriber("job:1", cli1.Id)
-	assert.Nil(t, err)
-	subscribersAfter = hub.SubscribersFor("job:1")
-	assert.Equal(t, []*HubChannel{cli3}, subscribersAfter)
-
-	err = hub.RemoveSubscriber("job:1", cli3.Id)
-	assert.Nil(t, err)
-	subscribersAfter = hub.SubscribersFor("job:1")
-	assert.Empty(t, subscribersAfter)	
+	assert.Empty(t, subscribersAfter)
 }
 
 func TestPublishToNonexistent(t *testing.T) {
@@ -290,19 +290,19 @@ func TestListen(t *testing.T) {
 		msges := []string{}
 
 		cli.ClientPing()
-		if !cli.Done() {
-			msges = append(msges, cli.Read())
+		if m, ok := <-cli.MsgCh; ok {
+			msges = append(msges, m)
 		}
 
-		cli.ClientPing()
-		if !cli.Done() {
-			msges = append(msges, cli.Read())
+		cli.ClientPing()		
+		if m, ok := <-cli.MsgCh; ok {
+			msges = append(msges, m)
 		}		
 		
 		assert.Equal(t, []string{"Hello Mike", "Hello Carol"}, msges)
 
+		// Job is deciding the feed is over, not client
 		cli.ClientPing()
-		assert.True(t, cli.Done())
 		
 		g3 <- true
 	}()
@@ -325,8 +325,8 @@ func typicalClient(t *testing.T, hub *Hub, jobContinue chan<- bool, expectedRead
 	messages := []string{}
 	for {
 		cli.ClientPing()
-		if(!cli.Done()) {
-			messages = append(messages, cli.Read())			
+		if m, ok := <- cli.MsgCh; ok {
+			messages = append(messages, m)
 		} else {
 			break
 		}
@@ -431,11 +431,9 @@ func TestClientExitsEarly(t *testing.T) {
 		
 		jobContinue <- true
 
-		result := ""
 		cli.ClientPing()
-		if(!cli.Done()) {
-			result = cli.Read()
-		}
+		result, ok := <-cli.MsgCh
+		assert.True(t, ok)
 		assert.Equal(t, "Hello Mike", result)
 		
 		cli.Close()
@@ -505,11 +503,9 @@ func TestClientExitsEarly2(t *testing.T) {
 		
 		jobContinue <- true
 
-		result := ""
 		cli.ClientPing()
-		if(!cli.Done()) {
-			result = cli.Read()
-		}
+		result, ok := <-cli.MsgCh
+		assert.True(t, ok)
 		assert.Equal(t, "Hello Mike", result)
 		
 		cli.Close()
