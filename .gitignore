@@ -6,6 +6,9 @@ bin/*
 log/*
 file_storage/*
 
+node_modules/*
+web_assets/*
+
 tmp/*
      
 .emacs.desktop

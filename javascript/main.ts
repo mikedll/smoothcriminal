@@ -1,9 +1,17 @@
 
+interface Window {
+  error: string;
+}
+
 const alerts = () => {
   if(window.error !== '') {
     const alerts = document.querySelector('.alerts-container');
+    if(alerts === null) {
+      console.error("unable to find alerts container");
+      return;
+    }
     const alert = document.createElement('div');
-    alert.appendChild(document.createTextNode(error));
+    alert.appendChild(document.createTextNode(window.error));
     alert.classList.add('alert');
     alert.classList.add('alert-danger');
     alerts.appendChild(alert);
@@ -24,6 +32,7 @@ const webSocket = () => {
     const matches = location.pathname.match(pathRegexp);
     if(matches === null) {
       addMessage(`Unable to parse path from: ${location.pathname}`);
+      return;
     }
 
     const ws = new WebSocket(`ws://localhost:8081/jobs/${matches[1]}/stream`);

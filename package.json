@@ -1,0 +1,20 @@
+{
+  "name": "smoothcriminal",
+  "version": "1.0.0",
+  "description": "Golang app that uses goroutines.",
+  "main": "index.js",
+  "scripts": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mikedll/smoothcriminal.git"
+  },
+  "author": "Michael Rivera",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/mikedll/smoothcriminal/issues"
+  },
+  "homepage": "https://github.com/mikedll/smoothcriminal#readme",
+  "dependencies": {
+    "esbuild": "0.17.19"
+  }
+}
