@@ -18,7 +18,7 @@ func TestBasic(t *testing.T) {
 
 }
 
-func add(t *testing.T, list *[]int, lock semaphore, doneCh chan bool, i int) {
+func add(t *testing.T, list *[]int, lock semaphore, doneCh chan Empty, i int) {
 	lock.P()
 
 	if i == 0 {
@@ -32,7 +32,7 @@ func add(t *testing.T, list *[]int, lock semaphore, doneCh chan bool, i int) {
 	*list = append(*list, i)
 	
 	lock.V()
-	doneCh <- true
+	doneCh <- Empty{}
 }
 
 func TestOrder(t *testing.T) {
@@ -47,9 +47,9 @@ func TestOrder(t *testing.T) {
 		t.Fatalf("Error when parsing duration: %s\n", err)
 	}
 
-	doneChs := [](chan bool){}
+	doneChs := [](chan Empty){}
 	for i := 0; i < 10; i++ {
-		doneCh := make(chan bool)
+		doneCh := make(chan Empty)
 		doneChs = append(doneChs, doneCh)
 		go add(t, list, lock, doneCh, i)
 		if i < 9 {
@@ -79,14 +79,14 @@ func TestReadWriteWriterCanLock(t *testing.T) {
 	lock := &ReadWriteLock{}
 	lock.Init()
 	
-	writeAcquired := make(chan bool)
+	writeAcquired := make(chan Empty)
 	list := []string{"hello"}
 
-	g1 := make(chan bool)
+	g1 := make(chan Empty)
 	
 	go func(lock *ReadWriteLock, list *[]string) {
 		lock.LockForWriting()
-		writeAcquired <- true
+		writeAcquired <- Empty{}
 
 		// wait for readers to get in line
 		pause, _ := time.ParseDuration("10ms")
@@ -96,14 +96,14 @@ func TestReadWriteWriterCanLock(t *testing.T) {
 
 		// readers can then proceed
 		lock.WritingUnlock()
-		g1 <- true
+		g1 <- Empty{}
 	}(lock, &list)
 
 	<-writeAcquired
 
-	readers := [](chan bool){}
+	readers := [](chan Empty){}
 	for i := 0; i < 3; i++ {
-		nextCh := make(chan bool)
+		nextCh := make(chan Empty)
 		readers = append(readers, nextCh)
 		go func(lock *ReadWriteLock, list *[]string) {
 			lock.LockForReading()
@@ -111,7 +111,7 @@ func TestReadWriteWriterCanLock(t *testing.T) {
 			assert.Equal(t, []string{"hello", "mike"}, *list)
 			
 			lock.ReadingUnlock()
-			nextCh <- true
+			nextCh <- Empty{}
 		}(lock, &list)
 	}
 
@@ -131,23 +131,23 @@ func TestReadWriteReadersCanLock(t *testing.T) {
 	
 	list := []string{"hello"}
 
-	readLockAcquired := [](chan bool){
-		make(chan bool),
-		make(chan bool),
-		make(chan bool),
+	readLockAcquired := [](chan Empty){
+		make(chan Empty),
+		make(chan Empty),
+		make(chan Empty),
 	}
 
-	rDone := [](chan bool){
-		make(chan bool),
-		make(chan bool),
-		make(chan bool),
+	rDone := [](chan Empty){
+		make(chan Empty),
+		make(chan Empty),
+		make(chan Empty),
 	}
 
-	g2 := make(chan bool)
+	g2 := make(chan Empty)
 	
 	acquireReadLock := func(lock *ReadWriteLock, list *[]string, idx int) {
 		lock.LockForReading()
-		readLockAcquired[idx] <- true
+		readLockAcquired[idx] <- Empty{}
 
 		// let writer get stuck
 		pause, _ := time.ParseDuration("10ms")
@@ -156,7 +156,7 @@ func TestReadWriteReadersCanLock(t *testing.T) {
 		assert.Equal(t, []string{"hello"}, *list)
 		
 		lock.ReadingUnlock()
-		rDone[idx] <- true
+		rDone[idx] <- Empty{}
 	}
 	
 	for i := 0; i < 3; i+= 1 {
@@ -174,7 +174,7 @@ func TestReadWriteReadersCanLock(t *testing.T) {
 
 		// readers can then proceed
 		lock.WritingUnlock()
-		g2 <- true
+		g2 <- Empty{}
 	}(lock, &list)
 
 	for i := 0; i < 3; i+= 1 {
@@ -187,15 +187,15 @@ func TestReadWriteWriterBlocksWriter(t *testing.T) {
 	lock := &ReadWriteLock{}
 	lock.Init()
 
-	firstWriterIsIn := make(chan bool)
+	firstWriterIsIn := make(chan Empty)
 	list := []string{"hello"}
 
-	g1 := make(chan bool)
-	g2 := make(chan bool)
+	g1 := make(chan Empty)
+	g2 := make(chan Empty)
 	
 	go func(lock *ReadWriteLock, list *[]string) {
 		lock.LockForWriting()
-		firstWriterIsIn <- true
+		firstWriterIsIn <- Empty{}
 
 		// wait for other writer to get in line
 		pause, _ := time.ParseDuration("10ms")
@@ -205,7 +205,7 @@ func TestReadWriteWriterBlocksWriter(t *testing.T) {
 
 		// readers can then proceed
 		lock.WritingUnlock()
-		g1 <- true
+		g1 <- Empty{}
 	}(lock, &list)
 
 	<-firstWriterIsIn
@@ -217,7 +217,7 @@ func TestReadWriteWriterBlocksWriter(t *testing.T) {
 
 		// readers can then proceed
 		lock.WritingUnlock()
-		g2 <- true
+		g2 <- Empty{}
 	}(lock, &list)	
 
 	<-g1
