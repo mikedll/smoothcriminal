@@ -69,7 +69,8 @@ func TestGetSubscription(t *testing.T) {
 	hub := &Hub{}
 	hub.Init()
 
-	sub1 := hub.CreateSubscription("job:1")
+	sub1, err := hub.CreateSubscription("job:1")
+	assert.Nil(t, err)
 
 	hubSub := hub.GetSubscription("job:1")
 
@@ -110,7 +111,8 @@ func TestGetSubscribers(t *testing.T) {
 	initialSubscribers := hub.SubscribersFor("job:1")
 	assert.Empty(t, initialSubscribers)
 	
-	hub.CreateSubscription("job:1")
+	_, err := hub.CreateSubscription("job:1")
+	assert.Nil(t, err)
 
 	cli1, err := hub.Subscribe("job:1")
 	assert.Nil(t, err)
@@ -136,7 +138,8 @@ func TestRemoveSubscriber(t *testing.T) {
 	hub := &Hub{}
 	hub.Init()
 
-	hub.CreateSubscription("job:1")
+	_, err := hub.CreateSubscription("job:1")
+	assert.Nil(t, err)
 
 	cli, err := hub.Subscribe("job:1")
 	assert.Nil(t, err)
@@ -193,12 +196,13 @@ func TestListenMissedSubscription(t *testing.T) {
 	
 	// Job
 	go func() {
-		hub.CreateSubscription("job:1")
+		_, err := hub.CreateSubscription("job:1")
+		assert.Nil(t, err)
 
 		seekSubscription <- Empty{}
 		<-subscriptionExists
 		
-		err := hub.PublishTo("job:1", "Hello Mike")
+		err = hub.PublishTo("job:1", "Hello Mike")
 		assert.Nil(t, err)
 		err = hub.PublishTo("job:1", "Hello Carol")
 		assert.Nil(t, err)		
@@ -268,7 +272,8 @@ func TestListen(t *testing.T) {
 	
 	// Job
 	go func() {		
-		hub.CreateSubscription("job:1")
+		_, err := hub.CreateSubscription("job:1")
+		assert.Nil(t, err)
 
 		clientGo <- Empty{}
 		<-jobContinue
@@ -358,7 +363,8 @@ func TestListen2Clients(t *testing.T) {
 
 	// Job
 	go func() {
-		hub.CreateSubscription("job:1")
+		_, err := hub.CreateSubscription("job:1")
+		assert.Nil(t, err)
 
 		clientGo <- Empty{}
 		<-jobContinue
@@ -406,7 +412,8 @@ func TestClientExitsEarly(t *testing.T) {
 
 	// Job
 	go func() {
-		hub.CreateSubscription("job:1")
+		_, err := hub.CreateSubscription("job:1")
+		assert.Nil(t, err)
 
 		clientGo <- Empty{}
 		<-jobContinue
@@ -476,7 +483,8 @@ func TestClientExitsEarly2(t *testing.T) {
 
 	// Job
 	go func() {
-		hub.CreateSubscription("job:1")
+		_, err := hub.CreateSubscription("job:1")
+		assert.Nil(t, err)
 
 		clientGo <- Empty{}
 		<-jobContinue

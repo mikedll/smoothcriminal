@@ -79,12 +79,20 @@ func (h *Hub) Init() {
 	h.Lock.Init()
 }
 
-// TODO: Guard with semaphore
 // TODO: Return error if subscription exists
-func (h *Hub) CreateSubscription(name string) *HubSubscription {
+func (h *Hub) CreateSubscription(name string) (*HubSubscription, error) {
+	h.Lock.LockForWriting()
+
+	if _, ok := h.Subscriptions[name]; ok {
+		h.Lock.WritingUnlock()
+		return nil, errors.New(fmt.Sprintf("Subscription already exists with name '%s'", name))
+	}
+
 	next := &HubSubscription{Name: name}
 	h.Subscriptions[name] = next
-	return next
+
+	h.Lock.WritingUnlock()
+	return next, nil
 }
 
 // TODO: Guard with semaphore
@@ -131,16 +139,20 @@ func (h *Hub) SubscribersFor(name string) []*HubChannel {
 	return cpy
 }
 
-// TODO: Protect with lock
 //
 // This does not check for subscription existence, as that would
 // require a lock and slow things down. If the subscription does not
 // exist, the subcribers list will come back empty, and nothing will happen.
 //
 func (h *Hub) PublishTo(name string, message string) error {
+	h.Lock.LockForReading()
+	
 	if _, ok := h.Subscriptions[name]; !ok {
+		h.Lock.ReadingUnlock()
 		return errors.New(fmt.Sprintf("Subscription does not exist: %s", name))
 	}
+
+	h.Lock.ReadingUnlock()
 	// fmt.Printf("PublishTo(): Sending into activity %p\n", h.ActivityFeed)
 	h.ActivityFeed <- HubActivity{ActType: HubActMessage, Subscription: name, Message: message}
 	return nil
@@ -188,12 +200,15 @@ func (h *Hub) removeAllSubscriptions() {
 	h.Lock.WritingUnlock()
 }
 
-// TODO: Protect with locks
 func (h *Hub) RemoveSubscription(name string) error {
+	h.Lock.LockForReading()
+	
 	if _, ok := h.Subscriptions[name]; !ok {
+		h.Lock.ReadingUnlock()
 		return errors.New(fmt.Sprintf("Subscription does not exist: %s", name))
 	}
 
+	h.Lock.ReadingUnlock()
 	h.ActivityFeed <- HubActivity{ActType: HubActRemoveSub, Subscription: name}
 
 	return nil
