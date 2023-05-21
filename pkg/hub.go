@@ -252,9 +252,10 @@ func (h *Hub) Listen() {
 					// and IsClientAlive will also block because the client is
 					// waiting for Listen() to pickup its message.
 					//
-					// Rebuttal to Preceding, Todo: Use a buffered channel. Permit Clients
-					// to move on with their usual loop if channel is full, but take advantage
-					// of the optimization if we can.
+					// Rebuttal to Preceding, Todo: Use the built-in function close().
+					// https://pkg.go.dev/builtin#close
+					// Permit Clients to move on with their usual loop if channel is full,
+					// but take advantage of the optimization if we can.
 					
 					// fmt.Printf("  Continuing because client is dead\n")
 					err := h.RemoveSubscriber(hubActivity.Subscription, subscriber.Id)
