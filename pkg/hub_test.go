@@ -21,7 +21,7 @@ func TestHubChannel(t *testing.T) {
 		if hCh.IsClientAlive() {
 			hCh.MsgCh <- "Hello"
 		}
-		g1 <- Empty{}
+		g1 <- Em
 	}()
 
 	// Client
@@ -30,7 +30,7 @@ func TestHubChannel(t *testing.T) {
 		m, ok := <-hCh.MsgCh
 		assert.True(t, ok)
 		assert.Equal(t, "Hello", m)
-		g2 <- Empty{}
+		g2 <- Em
 	}()
 
 	<-g1
@@ -49,7 +49,7 @@ func TestHubChannelClose(t *testing.T) {
 		if hCh.IsClientAlive() {
 			t.Fatalf("should not have been sent")
 		}
-		g1 <- Empty{}
+		g1 <- Em
 	}()
 
 	pause, _ := time.ParseDuration("10ms")
@@ -58,7 +58,7 @@ func TestHubChannelClose(t *testing.T) {
 	// Client
 	go func() {
 		hCh.Close()
-		g2 <- Empty{}
+		g2 <- Em
 	}()
 
 	<-g1
@@ -91,13 +91,13 @@ func TestActivityFeed(t *testing.T) {
 		act := <- hub.ActivityFeed
 		assert.Equal(t, HubActMessage, act.ActType)
 		assert.Equal(t, "job:1", act.Subscription)
-		g1 <- Empty{}
+		g1 <- Em
 	}()
 
 	// Job
 	go func() {
 		hub.ActivityFeed <- HubActivity{ActType: HubActMessage, Subscription: "job:1", Message: "Hello Mike"}
-		g2 <- Empty{}
+		g2 <- Em
 	}()
 
 	<-g1
@@ -155,7 +155,7 @@ func TestRemoveSubscriber(t *testing.T) {
 	
 	go func() {
 		hub.Listen()
-		g1 <- Empty{}
+		g1 <- Em
 	}()
 	
 	// will call removeSubscriber on both clients
@@ -191,7 +191,7 @@ func TestListenMissedSubscription(t *testing.T) {
 	// Listener
 	go func() {
 		hub.Listen()
-		g1 <- Empty{}
+		g1 <- Em
 	}()
 	
 	// Job
@@ -199,7 +199,7 @@ func TestListenMissedSubscription(t *testing.T) {
 		_, err := hub.CreateSubscription("job:1")
 		assert.Nil(t, err)
 
-		seekSubscription <- Empty{}
+		seekSubscription <- Em
 		<-subscriptionExists
 		
 		err = hub.PublishTo("job:1", "Hello Mike")
@@ -210,9 +210,9 @@ func TestListenMissedSubscription(t *testing.T) {
 		err = hub.RemoveSubscription("job:1")
 		assert.Nil(t, err)
 
-		detectMissingSubscription <- Empty{}
+		detectMissingSubscription <- Em
 		
-		g2 <- Empty{}
+		g2 <- Em
 	}()
 
 	// Client 1
@@ -228,7 +228,7 @@ func TestListenMissedSubscription(t *testing.T) {
 			}
 		}
 
-		subscriptionExists <- Empty{}
+		subscriptionExists <- Em
 		<-detectMissingSubscription
 
 		for {
@@ -243,7 +243,7 @@ func TestListenMissedSubscription(t *testing.T) {
 		_, err := hub.Subscribe("job:1")
 		assert.Equal(t, errors.New("Subscription does not exist: job:1"), err)
 
-		g3 <- Empty{}
+		g3 <- Em
 	}()
 
 	<-g2
@@ -264,7 +264,7 @@ func TestListen(t *testing.T) {
 	// Listener
 	go func() {
 		hub.Listen()
-		g1 <- Empty{}
+		g1 <- Em
 	}()
 
 	clientGo := make(chan Empty)
@@ -275,12 +275,12 @@ func TestListen(t *testing.T) {
 		_, err := hub.CreateSubscription("job:1")
 		assert.Nil(t, err)
 
-		clientGo <- Empty{}
+		clientGo <- Em
 		<-jobContinue
 		
 		hub.PublishTo("job:1", "Hello Mike")		
 		hub.PublishTo("job:1", "Hello Carol")		
-		jobDone <- Empty{}
+		jobDone <- Em
 	}()
 
 	// Client 1
@@ -291,7 +291,7 @@ func TestListen(t *testing.T) {
 			t.Fatalf("Failed to subscribe to job:1")
 		}
 
-		jobContinue <- Empty{}
+		jobContinue <- Em
 
 		msges := []string{}
 
@@ -310,7 +310,7 @@ func TestListen(t *testing.T) {
 		// The hub shutdown is deciding the feed is over, not client
 		cli.ClientPing()
 		
-		g3 <- Empty{}
+		g3 <- Em
 	}()
 	
 	<-jobDone
@@ -326,7 +326,7 @@ func typicalClient(t *testing.T, hub *Hub, jobContinue chan<- Empty, expectedRea
 	cli, err := hub.Subscribe("job:1")
 	assert.Nil(t, err)
 
-	jobContinue <- Empty{}
+	jobContinue <- Em
 
 	messages := []string{}
 	for {
@@ -340,7 +340,7 @@ func typicalClient(t *testing.T, hub *Hub, jobContinue chan<- Empty, expectedRea
 
 	assert.Equal(t, expectedReads, messages)
 	
-	exitCh <- Empty{}
+	exitCh <- Em
 }
 
 func TestListen2Clients(t *testing.T) {
@@ -358,7 +358,7 @@ func TestListen2Clients(t *testing.T) {
 	// Listener
 	go func() {
 		hub.Listen()
-		g1 <- Empty{}
+		g1 <- Em
 	}()
 
 	// Job
@@ -366,13 +366,13 @@ func TestListen2Clients(t *testing.T) {
 		_, err := hub.CreateSubscription("job:1")
 		assert.Nil(t, err)
 
-		clientGo <- Empty{}
+		clientGo <- Em
 		<-jobContinue
 		<-jobContinue
 		
 		hub.PublishTo("job:1", "Hello Mike")		
 		hub.PublishTo("job:1", "Hello Carol")		
-		jobThread <- Empty{}
+		jobThread <- Em
 	}()
 
 	<-clientGo
@@ -407,7 +407,7 @@ func TestClientExitsEarly(t *testing.T) {
 	// Listener
 	go func() {
 		hub.Listen()
-		g1 <- Empty{}
+		g1 <- Em
 	}()
 
 	// Job
@@ -415,7 +415,7 @@ func TestClientExitsEarly(t *testing.T) {
 		_, err := hub.CreateSubscription("job:1")
 		assert.Nil(t, err)
 
-		clientGo <- Empty{}
+		clientGo <- Em
 		<-jobContinue
 		<-jobContinue
 		<-jobContinue
@@ -423,7 +423,7 @@ func TestClientExitsEarly(t *testing.T) {
 		hub.PublishTo("job:1", "Hello Mike")
 		hub.PublishTo("job:1", "Hello Carol")
 		
-		jobThread <- Empty{}
+		jobThread <- Em
 	}()
 
 	<-clientGo
@@ -437,7 +437,7 @@ func TestClientExitsEarly(t *testing.T) {
 		cli, err := hub.Subscribe("job:1")
 		assert.Nil(t, err)
 		
-		jobContinue <- Empty{}
+		jobContinue <- Em
 
 		cli.ClientPing()
 		result, ok := <-cli.MsgCh
@@ -446,7 +446,7 @@ func TestClientExitsEarly(t *testing.T) {
 		
 		cli.Close()
 
-		g5 <- Empty{}
+		g5 <- Em
 	}()
 
 
@@ -478,7 +478,7 @@ func TestClientExitsEarly2(t *testing.T) {
 	// Listener
 	go func() {
 		hub.Listen()
-		g1 <- Empty{}
+		g1 <- Em
 	}()
 
 	// Job
@@ -486,7 +486,7 @@ func TestClientExitsEarly2(t *testing.T) {
 		_, err := hub.CreateSubscription("job:1")
 		assert.Nil(t, err)
 
-		clientGo <- Empty{}
+		clientGo <- Em
 		<-jobContinue
 		<-jobContinue
 		<-jobContinue
@@ -494,7 +494,7 @@ func TestClientExitsEarly2(t *testing.T) {
 		hub.PublishTo("job:1", "Hello Mike")
 		hub.RemoveSubscription("job:1")
 		
-		jobThread <- Empty{}
+		jobThread <- Em
 	}()
 
 	<-clientGo
@@ -508,7 +508,7 @@ func TestClientExitsEarly2(t *testing.T) {
 		cli, err := hub.Subscribe("job:1")
 		assert.Nil(t, err)
 		
-		jobContinue <- Empty{}
+		jobContinue <- Em
 
 		cli.ClientPing()
 		result, ok := <-cli.MsgCh
@@ -517,7 +517,7 @@ func TestClientExitsEarly2(t *testing.T) {
 		
 		cli.Close()
 
-		g5 <- Empty{}
+		g5 <- Em
 	}()
 	
 	<-jobThread
@@ -527,4 +527,8 @@ func TestClientExitsEarly2(t *testing.T) {
 	<-g3
 	<-g4
 	<-g5	
+}
+
+func hastyExitingClient(t *testing.T, exitCh chan<- bool) {
+	
 }

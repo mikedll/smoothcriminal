@@ -32,7 +32,7 @@ func add(t *testing.T, list *[]int, lock semaphore, doneCh chan Empty, i int) {
 	*list = append(*list, i)
 	
 	lock.V()
-	doneCh <- Empty{}
+	doneCh <- Em
 }
 
 func TestOrder(t *testing.T) {
@@ -86,7 +86,7 @@ func TestReadWriteWriterCanLock(t *testing.T) {
 	
 	go func(lock *ReadWriteLock, list *[]string) {
 		lock.LockForWriting()
-		writeAcquired <- Empty{}
+		writeAcquired <- Em
 
 		// wait for readers to get in line
 		pause, _ := time.ParseDuration("10ms")
@@ -96,7 +96,7 @@ func TestReadWriteWriterCanLock(t *testing.T) {
 
 		// readers can then proceed
 		lock.WritingUnlock()
-		g1 <- Empty{}
+		g1 <- Em
 	}(lock, &list)
 
 	<-writeAcquired
@@ -111,7 +111,7 @@ func TestReadWriteWriterCanLock(t *testing.T) {
 			assert.Equal(t, []string{"hello", "mike"}, *list)
 			
 			lock.ReadingUnlock()
-			nextCh <- Empty{}
+			nextCh <- Em
 		}(lock, &list)
 	}
 
@@ -147,7 +147,7 @@ func TestReadWriteReadersCanLock(t *testing.T) {
 	
 	acquireReadLock := func(lock *ReadWriteLock, list *[]string, idx int) {
 		lock.LockForReading()
-		readLockAcquired[idx] <- Empty{}
+		readLockAcquired[idx] <- Em
 
 		// let writer get stuck
 		pause, _ := time.ParseDuration("10ms")
@@ -156,7 +156,7 @@ func TestReadWriteReadersCanLock(t *testing.T) {
 		assert.Equal(t, []string{"hello"}, *list)
 		
 		lock.ReadingUnlock()
-		rDone[idx] <- Empty{}
+		rDone[idx] <- Em
 	}
 	
 	for i := 0; i < 3; i+= 1 {
@@ -174,7 +174,7 @@ func TestReadWriteReadersCanLock(t *testing.T) {
 
 		// readers can then proceed
 		lock.WritingUnlock()
-		g2 <- Empty{}
+		g2 <- Em
 	}(lock, &list)
 
 	for i := 0; i < 3; i+= 1 {
@@ -195,7 +195,7 @@ func TestReadWriteWriterBlocksWriter(t *testing.T) {
 	
 	go func(lock *ReadWriteLock, list *[]string) {
 		lock.LockForWriting()
-		firstWriterIsIn <- Empty{}
+		firstWriterIsIn <- Em
 
 		// wait for other writer to get in line
 		pause, _ := time.ParseDuration("10ms")
@@ -205,7 +205,7 @@ func TestReadWriteWriterBlocksWriter(t *testing.T) {
 
 		// readers can then proceed
 		lock.WritingUnlock()
-		g1 <- Empty{}
+		g1 <- Em
 	}(lock, &list)
 
 	<-firstWriterIsIn
@@ -217,7 +217,7 @@ func TestReadWriteWriterBlocksWriter(t *testing.T) {
 
 		// readers can then proceed
 		lock.WritingUnlock()
-		g2 <- Empty{}
+		g2 <- Em
 	}(lock, &list)	
 
 	<-g1

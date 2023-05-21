@@ -12,6 +12,8 @@ var Env string
 
 type Empty struct {}
 
+var Em Empty = Empty{}
+
 func fileExists(filename string) bool {
     info, err := os.Stat(filename)
     if os.IsNotExist(err) {
