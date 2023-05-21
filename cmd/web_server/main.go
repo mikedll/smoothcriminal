@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 	"time"
+	"encoding/json"
 	"github.com/qor/render"
 	"github.com/gorilla/websocket"
 )
@@ -191,6 +192,22 @@ func createJob(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, r.URL.Host + "/jobs/" + id, 302)
 }
 
+func subscriptions(w http.ResponseWriter, r *http.Request) {
+	ctx := defaultCtx()
+
+	subs := hub.GetSubscriptions()
+
+	bytes, err := json.Marshal(subs)
+	if err != nil {
+		fmt.Printf("Error when marshaling subscriptions: %s\n", err)
+		writeInteralServerError(w, r, err.Error())
+		return
+	}
+	
+	ctx["subscriptions"] = string(bytes)
+	renderer.Execute("subscriptions", ctx, r, w)
+}
+
 func main() {
 	fmt.Printf("Starting web server...\n")
 
@@ -209,6 +226,7 @@ func main() {
 	http.Handle("/", http.HandlerFunc(root))
 	http.Handle("/jobs", http.HandlerFunc(createJob))
 	http.Handle("/jobs/", http.HandlerFunc(job))
+	http.Handle("/subscriptions", http.HandlerFunc(subscriptions))
 
 	err := http.ListenAndServe("localhost:8081", nil)
 	if err != nil {

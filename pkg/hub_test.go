@@ -79,6 +79,24 @@ func TestGetSubscription(t *testing.T) {
 	assert.Equal(t, sub1, hubSub)
 }
 
+func TestGetSubscriptions(t *testing.T) {
+	hub := &Hub{}
+	hub.Init()
+	
+	hub.CreateSubscription("job:1")
+	hub.CreateSubscription("job:2")
+	hub.CreateSubscription("job:3")
+
+	subs := hub.GetSubscriptions()
+
+	names := []string{}
+	for _, sub := range subs {
+		names = append(names, sub.Name)
+	}
+
+	assert.ElementsMatch(t, []string{"job:1", "job:2", "job:3"}, names)
+}
+
 func TestCommandCh(t *testing.T) {
 	hub := &Hub{}
 	hub.Init()
@@ -700,3 +718,4 @@ func TestClientExitEarlyHasty2(t *testing.T) {
 	<-g1
 	<-g3
 }
+

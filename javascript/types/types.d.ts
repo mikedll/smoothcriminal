@@ -1,0 +1,4 @@
+
+interface Subscription {
+  name: string;
+}

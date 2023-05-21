@@ -15,6 +15,7 @@
   },
   "homepage": "https://github.com/mikedll/smoothcriminal#readme",
   "dependencies": {
-    "esbuild": "0.17.19"
+    "esbuild": "0.17.19",
+    "typescript": "^5.0.4"
   }
 }

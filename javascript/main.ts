@@ -1,6 +1,7 @@
 
 interface Window {
   error: string;
+  subscriptions: string;
 }
 
 const alerts = () => {
@@ -16,13 +17,35 @@ const alerts = () => {
     alert.classList.add('alert-danger');
     alerts.appendChild(alert);
   }
-}  
+}
+
+const subscriptions = () => {
+  const ul = document.querySelector('.subscriptions ul');
+  
+  if(ul === null) return;
+
+  const subscriptions: Subscription[] = JSON.parse(window.subscriptions);
+  subscriptions.forEach((s: Subscription) => {
+    const li = document.createElement('li');
+    li.appendChild(document.createTextNode(s.name));
+    ul.appendChild(li);
+  });
+
+  const summary = document.createElement('p');
+  summary.appendChild(document.createTextNode(`Found ${subscriptions.length} subscription(s).`))
+  const container = ul.closest('div');
+  if(container === null) {
+    console.error("unable to find container div of ul");
+    return;
+  }
+  container.appendChild(summary);
+}
 
 const webSocket = () => {
   const container = document.querySelector('.job-container');
 
   if(container !== null) {
-    const addMessage = (m) => {
+    const addMessage = (m: string) => {
       const div = document.createElement("div");
       div.appendChild(document.createTextNode(m));
       container.appendChild(div);
@@ -55,4 +78,5 @@ document.addEventListener("DOMContentLoaded", () => {
   console.log(`main.js executing`);
   alerts();
   webSocket();
+  subscriptions();
 });

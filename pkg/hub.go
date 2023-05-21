@@ -21,7 +21,7 @@ type HubChannel struct {
 }
 
 type HubSubscription struct {
-	Name string
+	Name string     `json:"name"`
 }
 
 type HubCommand struct {
@@ -98,6 +98,16 @@ func (h *Hub) GetSubscription(name string) *HubSubscription {
 	sub := h.Subscriptions[name]
 	h.Lock.ReadingUnlock()
 	return sub
+}
+
+func (h *Hub) GetSubscriptions() []*HubSubscription {
+	h.Lock.LockForReading()
+	ret := []*HubSubscription{}
+	for _, sub := range h.Subscriptions {
+		ret = append(ret, sub)
+	}
+	h.Lock.ReadingUnlock()
+	return ret
 }
 
 func (h *Hub) Subscribe(name string) (*HubChannel, error) {
