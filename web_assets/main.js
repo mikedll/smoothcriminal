@@ -14,8 +14,6 @@ const webSocket = () => {
   const container = document.querySelector('.job-container');
 
   if(container !== null) {
-    console.log("running websocket");
-
     const addMessage = (m) => {
       const div = document.createElement("div");
       div.appendChild(document.createTextNode(m));
