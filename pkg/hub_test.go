@@ -13,15 +13,15 @@ func TestHubChannel(t *testing.T) {
 	hCh := HubChannel{}
 	hCh.Init()
 
-	g1 := make(chan bool)
-	g2 := make(chan bool)
+	g1 := make(chan Empty)
+	g2 := make(chan Empty)
 	
 	// Publisher
 	go func() {
 		if hCh.IsClientAlive() {
 			hCh.Send("Hello")
 		}
-		g1 <- true
+		g1 <- Empty{}
 	}()
 
 	// Client
@@ -30,7 +30,7 @@ func TestHubChannel(t *testing.T) {
 		m, ok := <-hCh.MsgCh
 		assert.True(t, ok)
 		assert.Equal(t, "Hello", m)
-		g2 <- true
+		g2 <- Empty{}
 	}()
 
 	<-g1
@@ -41,26 +41,27 @@ func TestHubChannelClose(t *testing.T) {
 	hCh := HubChannel{}
 	hCh.Init()
 
-	g1 := make(chan bool)
-	g2 := make(chan bool)
+	g1 := make(chan Empty)
+	g2 := make(chan Empty)
 	
 	// Publisher
 	go func() {
-		ok := true
 		if hCh.IsClientAlive() {
-			hCh.Send("should not be sent")
-			ok = false
+			t.Fatalf("should not have been sent")
 		}
-		g1 <- ok
+		g1 <- Empty{}
 	}()
 
+	pause, _ := time.ParseDuration("10ms")
+	time.Sleep(pause)
+	
 	// Client
 	go func() {
 		hCh.Close()
-		g2 <- true
+		g2 <- Empty{}
 	}()
 
-	assert.Equal(t, <-g1, true)
+	<-g1
 	<-g2
 }
 
@@ -81,21 +82,21 @@ func TestActivityFeed(t *testing.T) {
 	hub := &Hub{}
 	hub.Init()
 
-	g1 := make(chan bool)
-	g2 := make(chan bool)
+	g1 := make(chan Empty)
+	g2 := make(chan Empty)
 	
 	// Listener
 	go func() {
 		act := <- hub.ActivityFeed
 		assert.Equal(t, HubActMessage, act.ActType)
 		assert.Equal(t, "job:1", act.Subscription)
-		g1 <- true
+		g1 <- Empty{}
 	}()
 
 	// Job
 	go func() {
 		hub.ActivityFeed <- HubActivity{ActType: HubActMessage, Subscription: "job:1", Message: "Hello Mike"}
-		g2 <- true
+		g2 <- Empty{}
 	}()
 
 	<-g1
@@ -176,25 +177,25 @@ func TestListenMissedSubscription(t *testing.T) {
 	hub := &Hub{}
 	hub.Init()
 
-	g1 := make(chan bool)
-	g2 := make(chan bool)
-	g3 := make(chan bool)
+	g1 := make(chan Empty)
+	g2 := make(chan Empty)
+	g3 := make(chan Empty)
 
-	seekSubscription := make(chan bool)
-	subscriptionExists := make(chan bool)
-	detectMissingSubscription := make(chan bool)
+	seekSubscription := make(chan Empty)
+	subscriptionExists := make(chan Empty)
+	detectMissingSubscription := make(chan Empty)
 	
 	// Listener
 	go func() {
 		hub.Listen()
-		g1 <- true
+		g1 <- Empty{}
 	}()
 	
 	// Job
 	go func() {
 		hub.CreateSubscription("job:1")
 
-		seekSubscription <- true
+		seekSubscription <- Empty{}
 		<-subscriptionExists
 		
 		err := hub.PublishTo("job:1", "Hello Mike")
@@ -205,9 +206,9 @@ func TestListenMissedSubscription(t *testing.T) {
 		err = hub.RemoveSubscription("job:1")
 		assert.Nil(t, err)
 
-		detectMissingSubscription <- true
+		detectMissingSubscription <- Empty{}
 		
-		g2 <- true
+		g2 <- Empty{}
 	}()
 
 	// Client 1
@@ -223,7 +224,7 @@ func TestListenMissedSubscription(t *testing.T) {
 			}
 		}
 
-		subscriptionExists <- true
+		subscriptionExists <- Empty{}
 		<-detectMissingSubscription
 
 		for {
@@ -238,7 +239,7 @@ func TestListenMissedSubscription(t *testing.T) {
 		_, err := hub.Subscribe("job:1")
 		assert.Equal(t, errors.New("Subscription does not exist: job:1"), err)
 
-		g3 <- true
+		g3 <- Empty{}
 	}()
 
 	<-g2
@@ -252,29 +253,29 @@ func TestListen(t *testing.T) {
 	hub := &Hub{}
 	hub.Init()
 
-	g1 := make(chan bool)
-	jobDone := make(chan bool)
-	g3 := make(chan bool)
+	g1 := make(chan Empty)
+	jobDone := make(chan Empty)
+	g3 := make(chan Empty)
 	
 	// Listener
 	go func() {
 		hub.Listen()
-		g1 <- true
+		g1 <- Empty{}
 	}()
 
-	clientGo := make(chan bool)
-	jobContinue := make(chan bool)
+	clientGo := make(chan Empty)
+	jobContinue := make(chan Empty)
 	
 	// Job
 	go func() {		
 		hub.CreateSubscription("job:1")
 
-		clientGo <- true
+		clientGo <- Empty{}
 		<-jobContinue
 		
 		hub.PublishTo("job:1", "Hello Mike")		
 		hub.PublishTo("job:1", "Hello Carol")		
-		jobDone <- true
+		jobDone <- Empty{}
 	}()
 
 	// Client 1
@@ -285,7 +286,7 @@ func TestListen(t *testing.T) {
 			t.Fatalf("Failed to subscribe to job:1")
 		}
 
-		jobContinue <- true
+		jobContinue <- Empty{}
 
 		msges := []string{}
 
@@ -304,7 +305,7 @@ func TestListen(t *testing.T) {
 		// The hub shutdown is deciding the feed is over, not client
 		cli.ClientPing()
 		
-		g3 <- true
+		g3 <- Empty{}
 	}()
 	
 	<-jobDone
@@ -316,11 +317,11 @@ func TestListen(t *testing.T) {
 	assert.Empty(t, hub.Subscribers)
 }
 
-func typicalClient(t *testing.T, hub *Hub, jobContinue chan<- bool, expectedReads []string, exitCh chan<- bool) {	
+func typicalClient(t *testing.T, hub *Hub, jobContinue chan<- Empty, expectedReads []string, exitCh chan<- Empty) {	
 	cli, err := hub.Subscribe("job:1")
 	assert.Nil(t, err)
 
-	jobContinue <- true
+	jobContinue <- Empty{}
 
 	messages := []string{}
 	for {
@@ -334,38 +335,38 @@ func typicalClient(t *testing.T, hub *Hub, jobContinue chan<- bool, expectedRead
 
 	assert.Equal(t, expectedReads, messages)
 	
-	exitCh <- true
+	exitCh <- Empty{}
 }
 
 func TestListen2Clients(t *testing.T) {
 	hub := &Hub{}
 	hub.Init()
 
-	g1 := make(chan bool)
-	jobThread := make(chan bool)
-	g3 := make(chan bool)
-	g4 := make(chan bool)
+	g1 := make(chan Empty)
+	jobThread := make(chan Empty)
+	g3 := make(chan Empty)
+	g4 := make(chan Empty)
 
-	clientGo := make(chan bool)
-	jobContinue := make(chan bool, 2)
+	clientGo := make(chan Empty)
+	jobContinue := make(chan Empty, 2)
 	
 	// Listener
 	go func() {
 		hub.Listen()
-		g1 <- true
+		g1 <- Empty{}
 	}()
 
 	// Job
 	go func() {
 		hub.CreateSubscription("job:1")
 
-		clientGo <- true
+		clientGo <- Empty{}
 		<-jobContinue
 		<-jobContinue
 		
 		hub.PublishTo("job:1", "Hello Mike")		
 		hub.PublishTo("job:1", "Hello Carol")		
-		jobThread <- true
+		jobThread <- Empty{}
 	}()
 
 	<-clientGo
@@ -388,26 +389,26 @@ func TestClientExitsEarly(t *testing.T) {
 	hub := &Hub{}
 	hub.Init()
 
-	g1 := make(chan bool)
-	jobThread := make(chan bool)
-	g3 := make(chan bool)
-	g4 := make(chan bool)
-	g5 := make(chan bool)
+	g1 := make(chan Empty)
+	jobThread := make(chan Empty)
+	g3 := make(chan Empty)
+	g4 := make(chan Empty)
+	g5 := make(chan Empty)
 	
-	clientGo := make(chan bool)
-	jobContinue := make(chan bool, 1)
+	clientGo := make(chan Empty)
+	jobContinue := make(chan Empty, 1)
 	
 	// Listener
 	go func() {
 		hub.Listen()
-		g1 <- true
+		g1 <- Empty{}
 	}()
 
 	// Job
 	go func() {
 		hub.CreateSubscription("job:1")
 
-		clientGo <- true
+		clientGo <- Empty{}
 		<-jobContinue
 		<-jobContinue
 		<-jobContinue
@@ -415,7 +416,7 @@ func TestClientExitsEarly(t *testing.T) {
 		hub.PublishTo("job:1", "Hello Mike")
 		hub.PublishTo("job:1", "Hello Carol")
 		
-		jobThread <- true
+		jobThread <- Empty{}
 	}()
 
 	<-clientGo
@@ -429,7 +430,7 @@ func TestClientExitsEarly(t *testing.T) {
 		cli, err := hub.Subscribe("job:1")
 		assert.Nil(t, err)
 		
-		jobContinue <- true
+		jobContinue <- Empty{}
 
 		cli.ClientPing()
 		result, ok := <-cli.MsgCh
@@ -438,7 +439,7 @@ func TestClientExitsEarly(t *testing.T) {
 		
 		cli.Close()
 
-		g5 <- true
+		g5 <- Empty{}
 	}()
 
 
@@ -460,26 +461,26 @@ func TestClientExitsEarly2(t *testing.T) {
 	hub := &Hub{}
 	hub.Init()
 
-	g1 := make(chan bool)
-	jobThread := make(chan bool)
-	g3 := make(chan bool)
-	g4 := make(chan bool)
-	g5 := make(chan bool)
+	g1 := make(chan Empty)
+	jobThread := make(chan Empty)
+	g3 := make(chan Empty)
+	g4 := make(chan Empty)
+	g5 := make(chan Empty)
 
-	clientGo := make(chan bool)
-	jobContinue := make(chan bool, 1)
+	clientGo := make(chan Empty)
+	jobContinue := make(chan Empty, 1)
 	
 	// Listener
 	go func() {
 		hub.Listen()
-		g1 <- true
+		g1 <- Empty{}
 	}()
 
 	// Job
 	go func() {
 		hub.CreateSubscription("job:1")
 
-		clientGo <- true
+		clientGo <- Empty{}
 		<-jobContinue
 		<-jobContinue
 		<-jobContinue
@@ -487,7 +488,7 @@ func TestClientExitsEarly2(t *testing.T) {
 		hub.PublishTo("job:1", "Hello Mike")
 		hub.RemoveSubscription("job:1")
 		
-		jobThread <- true
+		jobThread <- Empty{}
 	}()
 
 	<-clientGo
@@ -501,7 +502,7 @@ func TestClientExitsEarly2(t *testing.T) {
 		cli, err := hub.Subscribe("job:1")
 		assert.Nil(t, err)
 		
-		jobContinue <- true
+		jobContinue <- Empty{}
 
 		cli.ClientPing()
 		result, ok := <-cli.MsgCh
@@ -510,7 +511,7 @@ func TestClientExitsEarly2(t *testing.T) {
 		
 		cli.Close()
 
-		g5 <- true
+		g5 <- Empty{}
 	}()
 	
 	<-jobThread
