@@ -91,27 +91,6 @@ func webby(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func easyMonitor {
-	waitForClient, err := time.ParseDuration("1s")
-	if err != nil {
-		log.Fatalf("Unable to parse duration: %s\n", err)
-	}
-
-	time.Sleep(waitForClient)
-	
-	subscription = hub.GetSubscription("job:1")
-	
-	message <- subscription.Read()
-	for subscriber := range subscription.subscribersFor("subscriptionName") {
-		if subscriber.Closed() {
-			// subscriber unsubscribed after we popped it off the array
-			continue
-		}
-		outCh = subscriber.ch()
-		outCh <- message
-	}
-}
-
 func launchTask() {
 	outCh := hub.CreateSubscription("job:1")
 
@@ -130,8 +109,7 @@ func launchTask() {
 	outCh <- "Hello 3"
 	
 	time.Sleep(pause)
-	outCh <- "Hello 4"
-	
+	outCh <- "Hello 4"	
 }
 
 func start_webby(w http.ResponseWriter, req *http.Request) {
