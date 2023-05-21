@@ -66,10 +66,6 @@ func (hCh *HubChannel) ClientPing() {
 	hCh.ClientPings <- Empty{}
 }
 
-func (hCh *HubChannel) Send(message string) {
-	hCh.MsgCh <- message
-}
-
 func (h *Hub) Init() {
 	h.Ids = make(map[string]bool)
 	h.Subscribers = make(map[string][]*HubChannel)
@@ -249,7 +245,7 @@ func (h *Hub) Listen() {
 					}
 					continue
 				}
-				subscriber.Send(hubActivity.Message)
+				subscriber.MsgCh <- hubActivity.Message
 				// fmt.Printf("Done publishing to client %s\n", subscriber.Id)
 			}
 		}

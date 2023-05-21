@@ -19,7 +19,7 @@ func TestHubChannel(t *testing.T) {
 	// Publisher
 	go func() {
 		if hCh.IsClientAlive() {
-			hCh.Send("Hello")
+			hCh.MsgCh <- "Hello"
 		}
 		g1 <- Empty{}
 	}()
