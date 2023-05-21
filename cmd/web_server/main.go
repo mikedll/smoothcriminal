@@ -141,7 +141,9 @@ func runJob(jobId int) {
 		return
 	}
 
-	pause, err := time.ParseDuration("2s")
+	fmt.Printf("Created subscription: %s\n", jobStr)
+
+	pause, err := time.ParseDuration("1s")
 	if err != nil {
 		log.Fatalf("Unable to parse duration: %s\n", err)
 	}
@@ -193,6 +195,7 @@ func main() {
 	fmt.Printf("Starting web server...\n")
 
 	hub.Init()
+	go hub.Listen()
 	
 	renderer = render.New(&render.Config{
 		ViewPaths:     []string{ "web_app_views" },
