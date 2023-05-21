@@ -49,13 +49,14 @@ func writeError(w http.ResponseWriter, msg string, errorNum int) {
 	http.Error(w, msg, errorNum)
 }
 
-func writeInteralServerError(w http.ResponseWriter, msg string) {
-	fmt.Printf("Internal Server Error: %s\n", msg)
+func writeInteralServerError(w http.ResponseWriter, r *http.Request, msg string) {
+	fmt.Printf("Internal Server Error at %s: %s\n", r.URL.Path, msg)
 	writeError(w, msg, http.StatusInternalServerError)
 }
 
-func writeNotFound(w http.ResponseWriter) {
-	http.Error(w, "Not found", http.StatusNotFound)	
+func writeNotFound(w http.ResponseWriter, r *http.Request) {
+	fmt.Printf("Not Found at %s\n", r.URL.Path)
+	writeError(w, "Not found", http.StatusNotFound)
 }
 
 func root(w http.ResponseWriter, r *http.Request) {
@@ -68,36 +69,41 @@ func job(w http.ResponseWriter, r *http.Request) {
 
 	matches := jobIdRegex.FindStringSubmatch(r.URL.Path)
 	if matches == nil {
-		writeInteralServerError(w, "Unable to parse job id")
+		writeInteralServerError(w, r, fmt.Sprintf("Unable to parse job id in path: %s", r.URL.Path))
 		return
 	}
 
-	ctx["jobStr"] = "job:" + matches[1]
+	// fmt.Printf("Checking for stream job from URL: %s\n", r.URL.Path)
+	if r.URL.Path == "/jobs/" + matches[1] + "/stream" {
+		streamJob(w, r)
+		return
+	}
+
 	renderer.Execute("job", ctx, r, w)
 }
 
 func streamJob(w http.ResponseWriter, r *http.Request) {
+	fmt.Printf("streamJob executing\n")
 	matches := jobIdRegex.FindStringSubmatch(r.URL.Path)
 	if matches == nil {
-		writeInteralServerError(w, "Unable to parse job id")
+		writeInteralServerError(w, r, "Unable to parse job id")
 		return
 	}
-	jobStr := matches[1]
+	jobStr := "job:" + matches[1]
 
-	if r.URL.Path != "/jobs/" + jobStr + "/stream" {
-		writeNotFound(w)
+	if r.URL.Path != "/jobs/" + matches[1] + "/stream" {
+		writeNotFound(w, r)
 		return
 	}
 	
 	outConn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		fmt.Printf("Error when upgrading to web socket: %s", err)
-		writeInteralServerError(w, "unable to upgrade to websocket protocol")
+		writeInteralServerError(w, r, "unable to upgrade to websocket protocol")
 		return
 	}
 	defer outConn.Close()
 
-	// TODO: Handle subscription does not exist.
 	cli, err := hub.Subscribe(jobStr)
 	if err != nil {
 		fmt.Printf("Error when subscribing: %s\n", err)
@@ -151,22 +157,24 @@ func runJob(jobId int) {
 	
 	time.Sleep(pause)
 	hub.PublishTo(jobStr, "Hello 4")
+
+	hub.RemoveSubscription(jobStr)
 }
 
 func createJob(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeInteralServerError(w, "Method not supported at this URL")
+		writeInteralServerError(w, r, "Method not supported at this URL")
 		return
 	}
 
 	if err := r.ParseForm(); err != nil {
-		writeInteralServerError(w, "Unable to parse form data")
+		writeInteralServerError(w, r, "Unable to parse form data")
 		return
 	}
 
 	jobId, err := strconv.Atoi(r.FormValue("id"))
 	if err != nil {
-		writeInteralServerError(w, "Unable to parse job id")
+		writeInteralServerError(w, r, "Unable to parse job id")
 		return
 	}
 

@@ -15,18 +15,27 @@ const webSocket = () => {
 
   if(container !== null) {
     console.log("running websocket");
-    const ws = new WebSocket(`ws://localhost:8081/job/${window.jobStr}/stream`);
+
+    const addMessage = (m) => {
+      const div = document.createElement("div");
+      div.appendChild(document.createTextNode(m));
+      container.appendChild(div);
+    }
+
+    const pathRegexp = RegExp("/jobs/(\\d+)")
+    const matches = location.pathname.match(pathRegexp);
+    if(matches === null) {
+      addMessage(`Unable to parse path from: ${location.pathname}`);
+    }
+
+    const ws = new WebSocket(`ws://localhost:8081/jobs/${matches[1]}/stream`);
 
     ws.addEventListener("message", (event) => {
-      const div = document.createElement("div");
-      div.appendChild(document.createTextNode(event.data));
-      container.appendChild(div);
+      addMessage(event.data);
     });
 
     ws.addEventListener("close", (event) => {
-      const div = document.createElement("div");
-      div.appendChild(document.createTextNode("Web socket closed."));
-      container.appendChild(div);
+      addMessage("Web socket closed.");
     });
   }
 };
