@@ -301,7 +301,7 @@ func TestListen(t *testing.T) {
 		
 		assert.Equal(t, []string{"Hello Mike", "Hello Carol"}, msges)
 
-		// Job is deciding the feed is over, not client
+		// The hub shutdown is deciding the feed is over, not client
 		cli.ClientPing()
 		
 		g3 <- true

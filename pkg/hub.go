@@ -159,6 +159,12 @@ func (h *Hub) removeSubscription(name string, alreadyLocked bool) error {
 	}
 	
 	if _, ok := h.Subscribers[name]; ok {
+		for _, subscriber := range h.Subscribers[name] {
+			if subscriber.IsClientAlive() {
+				close(subscriber.MsgCh)
+			}
+		}
+		
 		delete(h.Subscribers, name)
 	}
 
