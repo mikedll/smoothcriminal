@@ -17,7 +17,7 @@ import (
 
 var renderer *render.Render;
 var upgrader = websocket.Upgrader{}
-var hub = &pkg.Hub{}
+var hub = &pkg.Hub{CommandChSize: 100}
 var jobIdRegex = regexp.MustCompile(`jobs/(\d+)`)
 
 func defaultCtx() map[string]interface{} {
