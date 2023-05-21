@@ -28,12 +28,16 @@ const webSocket = () => {
 
     const ws = new WebSocket(`ws://localhost:8081/jobs/${matches[1]}/stream`);
 
+    ws.addEventListener("open", (event) => {
+      addMessage("Web socket connection opened");
+    });
+
     ws.addEventListener("message", (event) => {
       addMessage(event.data);
     });
 
     ws.addEventListener("close", (event) => {
-      addMessage("Web socket closed.");
+      addMessage("Web socket connection closed.");
     });
   }
 };
