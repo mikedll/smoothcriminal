@@ -8,7 +8,7 @@ file_storage/*
 
 node_modules/*
 web_assets/*
-javascript/esbuild/*
+
 
 tmp/*
      
