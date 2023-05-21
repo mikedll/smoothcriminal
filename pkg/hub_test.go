@@ -529,6 +529,175 @@ func TestClientExitsEarly2(t *testing.T) {
 	<-g5	
 }
 
-func hastyExitingClient(t *testing.T, exitCh chan<- bool) {
+func hastyExitingClient(t *testing.T, hub *Hub, expectedMsg string, jobContinue chan<- Empty, exitCh chan<- Empty) {
+	cli, err := hub.Subscribe("job:1")
+	assert.Nil(t, err)
+
+	jobContinue <- Em
 	
+	cli.ClientPing()
+	m, ok := <- cli.MsgCh
+	assert.True(t, ok)
+	assert.Equal(t, expectedMsg, m)
+	cli.Close()
+	
+	removeAct := HubActivity{ActType: HubActRemoveSubscriber, Subscription: "job:1", SubscriberId: cli.Id}
+	select {
+	case hub.ActivityFeed <- removeAct:
+	default:
+	}
+
+	exitCh <- Em	
+}
+
+//
+// Hasty exit with no space in ActivityFeed buffer. In practice, the
+// HubActRemoveSubscriber consistently fails to be pushed into the channel.
+// I don't know how to force this though.
+//
+func TestClientExitEarlyHasty(t *testing.T) {
+	hub := &Hub{}
+	hub.Init()
+
+	g1 := make(chan Empty)
+	jobThread := make(chan Empty)
+	g3 := make(chan Empty)
+	g4 := make(chan Empty)
+
+	clientGo := make(chan Empty)
+	jobContinue := make(chan Empty)
+	
+	go func() {
+		hub.Listen()
+		g1 <- Em
+	}()
+
+	// Job
+	go func() {
+		_, err := hub.CreateSubscription("job:1")
+		assert.Nil(t, err)
+
+		clientGo <- Em
+		<-jobContinue
+		<-jobContinue
+		
+		hub.PublishTo("job:1", "Hello Mike")		
+		hub.PublishTo("job:1", "Hello Carol")
+		
+		jobThread <- Em
+	}()
+
+	<-clientGo
+	
+	// Client that stalls the publishing, to force the HubActRemoveSubscriber
+	// Activity to not be pushed.
+	go func() {
+		cli, err := hub.Subscribe("job:1")
+		assert.Nil(t, err)
+
+		jobContinue <- Em
+
+		cli.ClientPing()
+		m, ok := <- cli.MsgCh
+		assert.True(t, ok)
+		assert.Equal(t, "Hello Mike", m)
+
+		cli.ClientPing()
+		_, ok = <- cli.MsgCh
+		assert.True(t, ok)
+		
+		// This client would reach in its 3rd iteration if it was looping
+		cli.ClientPing()
+		_, ok = <- cli.MsgCh
+		assert.False(t, ok)
+
+		g3 <- Em		
+	}()
+	
+	go hastyExitingClient(t, hub, "Hello Mike", jobContinue, g4)
+
+	<-jobThread
+	<-g4
+	
+	hub.ActivityFeed <- HubActivity{ActType: HubActShutdown}
+
+	<-g1
+	<-g3
+}
+
+//
+// Hasty exit with some space in ActivityFeed buffer. The HubActRemoveSubscriber
+// will succeed in being pushed.
+//
+func TestClientExitEarlyHasty2(t *testing.T) {
+	hub := &Hub{ActivityFeedSize: 100}
+	hub.Init()
+
+	g1 := make(chan Empty)
+	jobThread := make(chan Empty)
+	g3 := make(chan Empty)
+	g4 := make(chan Empty)
+
+	clientGo := make(chan Empty)
+	jobContinue := make(chan Empty)
+	
+	go func() {
+		hub.Listen()
+		g1 <- Em
+	}()
+
+	// Job
+	go func() {
+		_, err := hub.CreateSubscription("job:1")
+		assert.Nil(t, err)
+
+		clientGo <- Em
+		<-jobContinue
+		<-jobContinue
+		
+		hub.PublishTo("job:1", "Hello Mike")
+
+		// Wait for hasty exit to push its remove command.
+		<-g4
+
+		hub.PublishTo("job:1", "Hello Carol")
+		
+		jobThread <- Em
+	}()
+
+	<-clientGo
+	
+	// Client that stalls the publishing, to force the HubActRemoveSubscriber
+	// Activity to not be pushed.
+	go func() {
+		cli, err := hub.Subscribe("job:1")
+		assert.Nil(t, err)
+
+		jobContinue <- Em
+
+		cli.ClientPing()
+		m, ok := <- cli.MsgCh
+		assert.True(t, ok)
+		assert.Equal(t, "Hello Mike", m)
+		
+		cli.ClientPing()
+		_, ok = <- cli.MsgCh
+		assert.True(t, ok)
+		
+		// This client would reach in its 3rd iteration if it was looping
+		cli.ClientPing()
+		_, ok = <- cli.MsgCh
+		assert.False(t, ok)
+
+		g3 <- Em		
+	}()
+	
+	go hastyExitingClient(t, hub, "Hello Mike", jobContinue, g4)
+
+	<-jobThread
+	
+	hub.ActivityFeed <- HubActivity{ActType: HubActShutdown}
+
+	<-g1
+	<-g3
 }

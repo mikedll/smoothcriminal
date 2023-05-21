@@ -8,9 +8,10 @@ import (
 )
 
 const (
-	HubActRemoveSub int = 0
-	HubActMessage       = 1
-	HubActShutdown      = 2
+	HubActRemoveSub int    = 0
+	HubActMessage          = 1
+	HubActShutdown         = 2
+	HubActRemoveSubscriber = 3
 )
 
 type HubChannel struct {
@@ -27,12 +28,14 @@ type HubActivity struct {
 	ActType int
 	Subscription string
 	Message string
+	SubscriberId string
 }
 
 type Hub struct {
 	Ids map[string]bool
 	Subscribers map[string][]*HubChannel
 	Subscriptions map[string]*HubSubscription
+	ActivityFeedSize int
 	ActivityFeed chan HubActivity
 	Lock *ReadWriteLock
 }
@@ -70,7 +73,7 @@ func (h *Hub) Init() {
 	h.Ids = make(map[string]bool)
 	h.Subscribers = make(map[string][]*HubChannel)
 	h.Subscriptions = make(map[string]*HubSubscription)
-	h.ActivityFeed = make(chan HubActivity)
+	h.ActivityFeed = make(chan HubActivity, h.ActivityFeedSize)
 	h.Lock = &ReadWriteLock{}
 	h.Lock.Init()
 }
@@ -169,6 +172,7 @@ func (h *Hub) removeSubscription(name string, alreadyLocked bool) error {
 	
 	if _, ok := h.Subscribers[name]; ok {
 		for _, subscriber := range h.Subscribers[name] {
+			// fmt.Printf("Checking if client is alive from removeSubscription, Id=%s\n", subscriber.Id)
 			if subscriber.IsClientAlive() {
 				close(subscriber.MsgCh)
 			}
@@ -234,6 +238,12 @@ func (h *Hub) Listen() {
 			if err != nil {
 				fmt.Printf("Error when removing subscription: %s\n", err)
 			}
+		case HubActRemoveSubscriber:
+			// fmt.Printf("Removing subscriber from feed message\n")
+			err := h.removeSubscriber(hubActivity.Subscription, hubActivity.SubscriberId)
+			if err != nil {
+				fmt.Printf("Error when removing subscriber: %s\n", err)
+			}
 		case HubActMessage:
 			for _, subscriber := range h.SubscribersFor(hubActivity.Subscription) {
 				// fmt.Printf("Publishing to client %s\n", subscriber.Id)
@@ -241,7 +251,7 @@ func (h *Hub) Listen() {
 					// fmt.Printf("  Continuing because client is dead\n")
 					err := h.removeSubscriber(hubActivity.Subscription, subscriber.Id)
 					if err != nil {
-						fmt.Printf("Error when removing subscriber: %s", err)
+						fmt.Printf("Error when removing subscriber: %s\n", err)
 					}
 					continue
 				}
@@ -249,8 +259,11 @@ func (h *Hub) Listen() {
 				// fmt.Printf("Done publishing to client %s\n", subscriber.Id)
 			}
 		}
+
+		// fmt.Printf("Looping in Listen()\n")
 	}
 
+	// fmt.Printf("Removing all subscriptions\n")
 	h.removeAllSubscriptions()
 }
 
@@ -270,8 +283,10 @@ func (h *Hub) removeSubscriber(name string, id string) error {
 	}
 
 	if idx == -1 {
+		// This can happen if a subscriber is removed during publishing and
+		// before its HubActRemoveSubscriber is treated.
 		h.Lock.WritingUnlock()
-		return errors.New(fmt.Sprintf("Unable to find subscriber with id: %s", id))
+		return nil
 	}
 
 	delete(h.Ids, id)
