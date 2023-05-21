@@ -8,10 +8,10 @@ import (
 )
 
 const (
-	HubActRemoveSub int    = 0
-	HubActMessage          = 1
-	HubActShutdown         = 2
-	HubActRemoveSubscriber = 3
+	HubCmdRemoveSub int    = 0
+	HubCmdMessage          = 1
+	HubCmdShutdown         = 2
+	HubCmdRemoveSubscriber = 3
 )
 
 type HubChannel struct {
@@ -24,8 +24,8 @@ type HubSubscription struct {
 	Name string
 }
 
-type HubActivity struct {
-	ActType int
+type HubCommand struct {
+	CmdType int
 	Subscription string
 	Message string
 	SubscriberId string
@@ -35,8 +35,8 @@ type Hub struct {
 	Ids map[string]bool
 	Subscribers map[string][]*HubChannel
 	Subscriptions map[string]*HubSubscription
-	ActivityFeedSize int
-	ActivityFeed chan HubActivity
+	CommandChSize int
+	CommandCh chan HubCommand
 	Lock *ReadWriteLock
 }
 
@@ -73,7 +73,7 @@ func (h *Hub) Init() {
 	h.Ids = make(map[string]bool)
 	h.Subscribers = make(map[string][]*HubChannel)
 	h.Subscriptions = make(map[string]*HubSubscription)
-	h.ActivityFeed = make(chan HubActivity, h.ActivityFeedSize)
+	h.CommandCh = make(chan HubCommand, h.CommandChSize)
 	h.Lock = &ReadWriteLock{}
 	h.Lock.Init()
 }
@@ -153,8 +153,8 @@ func (h *Hub) PublishTo(name string, message string) error {
 	}
 
 	h.Lock.ReadingUnlock()
-	// fmt.Printf("PublishTo(): Sending into activity %p\n", h.ActivityFeed)
-	h.ActivityFeed <- HubActivity{ActType: HubActMessage, Subscription: name, Message: message}
+	// fmt.Printf("PublishTo(): Sending into activity %p\n", h.CommandCh)
+	h.CommandCh <- HubCommand{CmdType: HubCmdMessage, Subscription: name, Message: message}
 	return nil
 }
 
@@ -210,7 +210,7 @@ func (h *Hub) RemoveSubscription(name string) error {
 	}
 
 	h.Lock.ReadingUnlock()
-	h.ActivityFeed <- HubActivity{ActType: HubActRemoveSub, Subscription: name}
+	h.CommandCh <- HubCommand{CmdType: HubCmdRemoveSub, Subscription: name}
 
 	return nil
 }
@@ -218,44 +218,36 @@ func (h *Hub) RemoveSubscription(name string) error {
 func (h *Hub) Listen() {
 	Loop:
 	for {
-		// this has to be generalized to an action feed, and the messages have to
-		// state what they're describing. this way, the subscribers can be cleaned
-		// up right away, instead of having to wait to see if there was a message.
-		// subscribers to topics should be followed with integer ids, so that we
-		// can see if we already removed them off.
+		// fmt.Printf("Listen(): reading an activity %p\n", h.CommandCh)
+		hubCommand := <-h.CommandCh
 
-		// TODO: Get rid of Subscription struct. It doesn't get us anything. We
-		// can just use the activity stream.
-		// fmt.Printf("Listen(): reading an activity %p\n", h.ActivityFeed)
-		hubActivity := <-h.ActivityFeed
-
-		switch hubActivity.ActType {
-		case HubActShutdown:
+		switch hubCommand.CmdType {
+		case HubCmdShutdown:
 			fmt.Printf("Hub got Shutdown\n")
 			break Loop
-		case HubActRemoveSub:
-			err := h.removeSubscription(hubActivity.Subscription, false)
+		case HubCmdRemoveSub:
+			err := h.removeSubscription(hubCommand.Subscription, false)
 			if err != nil {
 				fmt.Printf("Error when removing subscription: %s\n", err)
 			}
-		case HubActRemoveSubscriber:
+		case HubCmdRemoveSubscriber:
 			// fmt.Printf("Removing subscriber from feed message\n")
-			err := h.removeSubscriber(hubActivity.Subscription, hubActivity.SubscriberId)
+			err := h.removeSubscriber(hubCommand.Subscription, hubCommand.SubscriberId)
 			if err != nil {
 				fmt.Printf("Error when removing subscriber: %s\n", err)
 			}
-		case HubActMessage:
-			for _, subscriber := range h.SubscribersFor(hubActivity.Subscription) {
+		case HubCmdMessage:
+			for _, subscriber := range h.SubscribersFor(hubCommand.Subscription) {
 				// fmt.Printf("Publishing to client %s\n", subscriber.Id)
 				if !subscriber.IsClientAlive() {					
 					// fmt.Printf("  Continuing because client is dead\n")
-					err := h.removeSubscriber(hubActivity.Subscription, subscriber.Id)
+					err := h.removeSubscriber(hubCommand.Subscription, subscriber.Id)
 					if err != nil {
 						fmt.Printf("Error when removing subscriber: %s\n", err)
 					}
 					continue
 				}
-				subscriber.MsgCh <- hubActivity.Message
+				subscriber.MsgCh <- hubCommand.Message
 				// fmt.Printf("Done publishing to client %s\n", subscriber.Id)
 			}
 		}
@@ -284,7 +276,7 @@ func (h *Hub) removeSubscriber(name string, id string) error {
 
 	if idx == -1 {
 		// This can happen if a subscriber is removed during publishing and
-		// before its HubActRemoveSubscriber is treated.
+		// before its HubCmdRemoveSubscriber is treated.
 		h.Lock.WritingUnlock()
 		return nil
 	}

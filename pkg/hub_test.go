@@ -79,7 +79,7 @@ func TestGetSubscription(t *testing.T) {
 	assert.Equal(t, sub1, hubSub)
 }
 
-func TestActivityFeed(t *testing.T) {
+func TestCommandCh(t *testing.T) {
 	hub := &Hub{}
 	hub.Init()
 
@@ -88,15 +88,15 @@ func TestActivityFeed(t *testing.T) {
 	
 	// Listener
 	go func() {
-		act := <- hub.ActivityFeed
-		assert.Equal(t, HubActMessage, act.ActType)
-		assert.Equal(t, "job:1", act.Subscription)
+		cmd := <- hub.CommandCh
+		assert.Equal(t, HubCmdMessage, cmd.CmdType)
+		assert.Equal(t, "job:1", cmd.Subscription)
 		g1 <- Em
 	}()
 
 	// Job
 	go func() {
-		hub.ActivityFeed <- HubActivity{ActType: HubActMessage, Subscription: "job:1", Message: "Hello Mike"}
+		hub.CommandCh <- HubCommand{CmdType: HubCmdMessage, Subscription: "job:1", Message: "Hello Mike"}
 		g2 <- Em
 	}()
 
@@ -160,7 +160,7 @@ func TestRemoveSubscriber(t *testing.T) {
 	
 	// will call removeSubscriber on both clients
 	hub.PublishTo("job:1", "Hello")
-	hub.ActivityFeed <- HubActivity{ActType: HubActShutdown}
+	hub.CommandCh <- HubCommand{CmdType: HubCmdShutdown}
 	
 	<-g1
 	
@@ -247,7 +247,7 @@ func TestListenMissedSubscription(t *testing.T) {
 	}()
 
 	<-g2
-	hub.ActivityFeed <- HubActivity{ActType: HubActShutdown}
+	hub.CommandCh <- HubCommand{CmdType: HubCmdShutdown}
 	
 	<-g1
 	<-g3
@@ -307,14 +307,14 @@ func TestListen(t *testing.T) {
 		
 		assert.Equal(t, []string{"Hello Mike", "Hello Carol"}, msges)
 
-		// The hub shutdown is deciding the feed is over, not client
+		// The hub shutdown is deciding the client session is over, not client
 		cli.ClientPing()
 		
 		g3 <- Em
 	}()
 	
 	<-jobDone
-	hub.ActivityFeed <- HubActivity{ActType: HubActShutdown}
+	hub.CommandCh <- HubCommand{CmdType: HubCmdShutdown}
 	
 	<-g1
 	<-g3
@@ -380,7 +380,7 @@ func TestListen2Clients(t *testing.T) {
 	go typicalClient(t, hub, jobContinue, []string{"Hello Mike", "Hello Carol"}, g4)
 
 	<-jobThread
-	hub.ActivityFeed <- HubActivity{ActType: HubActShutdown}
+	hub.CommandCh <- HubCommand{CmdType: HubCmdShutdown}
 	
 	<-g1
 	<-g3
@@ -451,7 +451,7 @@ func TestClientExitsEarly(t *testing.T) {
 
 
 	<-jobThread
-	hub.ActivityFeed <- HubActivity{ActType: HubActShutdown}
+	hub.CommandCh <- HubCommand{CmdType: HubCmdShutdown}
 	
 	<-g1
 	<-g3
@@ -521,7 +521,7 @@ func TestClientExitsEarly2(t *testing.T) {
 	}()
 	
 	<-jobThread
-	hub.ActivityFeed <- HubActivity{ActType: HubActShutdown}
+	hub.CommandCh <- HubCommand{CmdType: HubCmdShutdown}
 	
 	<-g1
 	<-g3
@@ -541,9 +541,9 @@ func hastyExitingClient(t *testing.T, hub *Hub, expectedMsg string, jobContinue 
 	assert.Equal(t, expectedMsg, m)
 	cli.Close()
 	
-	removeAct := HubActivity{ActType: HubActRemoveSubscriber, Subscription: "job:1", SubscriberId: cli.Id}
+	removeCmd := HubCommand{CmdType: HubCmdRemoveSubscriber, Subscription: "job:1", SubscriberId: cli.Id}
 	select {
-	case hub.ActivityFeed <- removeAct:
+	case hub.CommandCh <- removeCmd:
 	default:
 	}
 
@@ -551,8 +551,8 @@ func hastyExitingClient(t *testing.T, hub *Hub, expectedMsg string, jobContinue 
 }
 
 //
-// Hasty exit with no space in ActivityFeed buffer. In practice, the
-// HubActRemoveSubscriber consistently fails to be pushed into the channel.
+// Hasty exit with no space in CommandCh buffer. In practice, the
+// HubCmdRemoveSubscriber consistently fails to be pushed into the channel.
 // I don't know how to force this though.
 //
 func TestClientExitEarlyHasty(t *testing.T) {
@@ -589,8 +589,8 @@ func TestClientExitEarlyHasty(t *testing.T) {
 
 	<-clientGo
 	
-	// Client that stalls the publishing, to force the HubActRemoveSubscriber
-	// Activity to not be pushed.
+	// Client that stalls the publishing, to (try to) force the HubCmdRemoveSubscriber
+	// Command to not be pushed.
 	go func() {
 		cli, err := hub.Subscribe("job:1")
 		assert.Nil(t, err)
@@ -619,18 +619,18 @@ func TestClientExitEarlyHasty(t *testing.T) {
 	<-jobThread
 	<-g4
 	
-	hub.ActivityFeed <- HubActivity{ActType: HubActShutdown}
+	hub.CommandCh <- HubCommand{CmdType: HubCmdShutdown}
 
 	<-g1
 	<-g3
 }
 
 //
-// Hasty exit with some space in ActivityFeed buffer. The HubActRemoveSubscriber
+// Hasty exit with some space in CommandCh buffer. The HubCmdRemoveSubscriber
 // will succeed in being pushed.
 //
 func TestClientExitEarlyHasty2(t *testing.T) {
-	hub := &Hub{ActivityFeedSize: 100}
+	hub := &Hub{CommandChSize: 100}
 	hub.Init()
 
 	g1 := make(chan Empty)
@@ -666,9 +666,8 @@ func TestClientExitEarlyHasty2(t *testing.T) {
 	}()
 
 	<-clientGo
-	
-	// Client that stalls the publishing, to force the HubActRemoveSubscriber
-	// Activity to not be pushed.
+
+	// Non hasty client
 	go func() {
 		cli, err := hub.Subscribe("job:1")
 		assert.Nil(t, err)
@@ -696,7 +695,7 @@ func TestClientExitEarlyHasty2(t *testing.T) {
 
 	<-jobThread
 	
-	hub.ActivityFeed <- HubActivity{ActType: HubActShutdown}
+	hub.CommandCh <- HubCommand{CmdType: HubCmdShutdown}
 
 	<-g1
 	<-g3
