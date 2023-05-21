@@ -454,8 +454,6 @@ func TestClientExitsEarly(t *testing.T) {
 
 //
 // Scenario of client exiting early, right before a subscription is removed.
-// This tests that the Hub can gracefully handle the client that has sent
-// the Close message instead of a ping.
 //
 func TestClientExitsEarly2(t *testing.T) {
 	hub := &Hub{}
