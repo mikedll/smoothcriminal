@@ -1,8 +1,8 @@
 
-all: bin/web_server ./web_assets/main.js
+all: bin/smoothcriminal ./web_assets/main.js
 
-bin/web_server: $(wildcard cmd/web_server/*.go)
-	go build -o bin/web_server ./cmd/web_server
+bin/smoothcriminal: $(wildcard cmd/web_server/*.go)
+	go build -o bin/smoothcriminal ./cmd/web_server
 
 clean:
 	rm -rf ./bin/* ./web_assets/*

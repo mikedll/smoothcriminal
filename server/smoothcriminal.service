@@ -1,0 +1,19 @@
+
+# Place in /etc/systemd/system
+# Maybe it should be in /lib/systemd on Ubuntu but we can worry about that some other time.
+  
+[Unit]
+Description=Smooth Criminal Web Server
+After=network.target
+StartLimitIntervalSec=30
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=3
+User=mrmike
+WorkingDirectory=/home/mrmike/smoothcriminal
+ExecStart=/home/mrmike/smoothcriminal/bin/smoothcriminal
+
+[Install]
+WantedBy=multi-user.target
