@@ -2,6 +2,7 @@
 interface Window {
   error: string;
   subscriptions: string;
+  host: string;
 }
 
 const alerts = () => {
@@ -63,7 +64,7 @@ const webSocket = () => {
     return;
   }
 
-  const ws = new WebSocket(`ws://localhost:8081/jobs/${matches[1]}/stream`);
+  const ws = new WebSocket(`ws://${window.host}/jobs/${matches[1]}/stream`);
 
   ws.addEventListener("open", (event) => {
     addMessage("Web socket connection opened");

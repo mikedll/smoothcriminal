@@ -20,6 +20,7 @@ var renderer *render.Render;
 var upgrader = websocket.Upgrader{}
 var hub = &pkg.Hub[pkg.JobStatus]{CommandChSize: 100}
 var jobIdRegex = regexp.MustCompile(`jobs/(\d+)`)
+var PublicHost string
 
 func defaultCtx() map[string]interface{} {
 	ctx := make(map[string]interface{})
@@ -43,6 +44,7 @@ func defaultCtx() map[string]interface{} {
 		
 		ctx["googleAnalytics"] = template.HTML(snippet)
 	}
+	ctx["host"] = PublicHost
 	return ctx
 }
 
@@ -232,6 +234,11 @@ func main() {
 
 	if port != "" {
 		addr = fmt.Sprintf("localhost:%s", port)
+	}
+
+	PublicHost = addr
+	if os.Getenv("HOST") != "" {
+		PublicHost = os.Getenv("HOST")
 	}
 
 	err := http.ListenAndServe(addr, nil)
