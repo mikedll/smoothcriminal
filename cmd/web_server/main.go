@@ -207,6 +207,9 @@ func subscriptions(w http.ResponseWriter, r *http.Request) {
 func main() {
 	fmt.Printf("Starting web server...\n")
 
+	pkg.Init()
+	fmt.Printf("Web server loading for env %s...\n", pkg.Env)
+	
 	hub.Init()
 	go hub.Listen()
 	
@@ -224,7 +227,14 @@ func main() {
 	http.Handle("/jobs/", http.HandlerFunc(job))
 	http.Handle("/subscriptions", http.HandlerFunc(subscriptions))
 
-	err := http.ListenAndServe("localhost:8081", nil)
+	var addr string = "localhost:8081"
+	port := os.Getenv("PORT")
+
+	if port != "" {
+		addr = fmt.Sprintf("localhost:%s", port)
+	}
+
+	err := http.ListenAndServe(addr, nil)
 	if err != nil {
 		log.Fatalf("Error on ListenAndServe: %s\n", err)
 	}
