@@ -77,7 +77,6 @@ const webSocket = () => {
         break;
       case "complete":
         const wholeNum = Math.round(jobStatus.percentComplete * 100);
-        console.log("maints webSocket wholeNum", jobStatus.percentComplete, wholeNum);
         progressBar.style.width = `${wholeNum}%`;
         break;
     }
