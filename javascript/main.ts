@@ -65,7 +65,15 @@ const webSocket = () => {
     });
 
     ws.addEventListener("message", (event) => {
-      addMessage(event.data);
+      const jobStatus: MessageJobStatus | PercentJobStatus = JSON.parse(event.data);
+      switch(jobStatus.type) {
+        case "message":
+          addMessage(jobStatus.message);
+          break;
+        case "complete":
+          addMessage(`Percent: ${jobStatus.percentComplete}`);
+          break;
+      }
     });
 
     ws.addEventListener("close", (event) => {

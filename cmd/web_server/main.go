@@ -18,7 +18,7 @@ import (
 
 var renderer *render.Render;
 var upgrader = websocket.Upgrader{}
-var hub = &pkg.Hub{CommandChSize: 100}
+var hub = &pkg.Hub[pkg.JobStatus]{CommandChSize: 100}
 var jobIdRegex = regexp.MustCompile(`jobs/(\d+)`)
 
 func defaultCtx() map[string]interface{} {
@@ -115,12 +115,12 @@ func streamJob(w http.ResponseWriter, r *http.Request) {
 		cli.ClientPing()
 		if m, ok := <- cli.MsgCh; ok {
 
-			err := outConn.WriteMessage(websocket.TextMessage, []byte(m))
+			err := outConn.WriteJSON(m)
 			if err != nil {
 				fmt.Printf("Unable to write message: %s\n", err)
 				// this is how we detect that client closed at this time lol.
 				cli.Close()
-				removeCmd := pkg.HubCommand{CmdType: pkg.HubCmdRemoveSubscriber, Subscription: jobStr, SubscriberId: cli.Id}
+				removeCmd := pkg.HubCommand[pkg.JobStatus]{CmdType: pkg.HubCmdRemoveSubscriber, Subscription: jobStr, SubscriberId: cli.Id}
 				select {
 				case hub.CommandCh <- removeCmd:
 					break
@@ -153,7 +153,7 @@ func runJob(jobId int) {
 
 	for i := 0; i < 15; i++ {
 		time.Sleep(pause)
-		hub.PublishTo(jobStr, fmt.Sprintf("Part %d\n", i))
+		hub.PublishTo(jobStr, pkg.JobStatus{Type: "message", Message: fmt.Sprintf("Part %d\n", i)})
 	}
 	
 	hub.RemoveSubscription(jobStr)

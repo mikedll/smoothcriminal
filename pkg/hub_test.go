@@ -10,7 +10,7 @@ import (
 )
 
 func TestHubChannel(t *testing.T) {
-	hCh := HubChannel{}
+	hCh := HubChannel[string]{}
 	hCh.Init()
 
 	g1 := make(chan Empty)
@@ -38,7 +38,7 @@ func TestHubChannel(t *testing.T) {
 }
 
 func TestHubChannelClose(t *testing.T) {
-	hCh := HubChannel{}
+	hCh := HubChannel[string]{}
 	hCh.Init()
 
 	g1 := make(chan Empty)
@@ -66,7 +66,7 @@ func TestHubChannelClose(t *testing.T) {
 }
 
 func TestGetSubscription(t *testing.T) {
-	hub := &Hub{}
+	hub := &Hub[string]{}
 	hub.Init()
 
 	sub1, err := hub.CreateSubscription("job:1")
@@ -80,7 +80,7 @@ func TestGetSubscription(t *testing.T) {
 }
 
 func TestGetSubscriptions(t *testing.T) {
-	hub := &Hub{}
+	hub := &Hub[string]{}
 	hub.Init()
 	
 	hub.CreateSubscription("job:1")
@@ -98,7 +98,7 @@ func TestGetSubscriptions(t *testing.T) {
 }
 
 func TestCommandCh(t *testing.T) {
-	hub := &Hub{}
+	hub := &Hub[string]{}
 	hub.Init()
 
 	g1 := make(chan Empty)
@@ -114,7 +114,7 @@ func TestCommandCh(t *testing.T) {
 
 	// Job
 	go func() {
-		hub.CommandCh <- HubCommand{CmdType: HubCmdMessage, Subscription: "job:1", Message: "Hello Mike"}
+		hub.CommandCh <- HubCommand[string]{CmdType: HubCmdMessage, Subscription: "job:1", Message: "Hello Mike"}
 		g2 <- Em
 	}()
 
@@ -123,7 +123,7 @@ func TestCommandCh(t *testing.T) {
 }
 
 func TestGetSubscribers(t *testing.T) {
-	hub := &Hub{}
+	hub := &Hub[string]{}
 	hub.Init()
 
 	initialSubscribers := hub.SubscribersFor("job:1")
@@ -153,7 +153,7 @@ func TestGetSubscribers(t *testing.T) {
 }
 
 func TestRemoveSubscriber(t *testing.T) {
-	hub := &Hub{}
+	hub := &Hub[string]{}
 	hub.Init()
 
 	_, err := hub.CreateSubscription("job:1")
@@ -178,7 +178,7 @@ func TestRemoveSubscriber(t *testing.T) {
 	
 	// will call removeSubscriber on both clients
 	hub.PublishTo("job:1", "Hello")
-	hub.CommandCh <- HubCommand{CmdType: HubCmdShutdown}
+	hub.CommandCh <- HubCommand[string]{CmdType: HubCmdShutdown}
 	
 	<-g1
 	
@@ -187,7 +187,7 @@ func TestRemoveSubscriber(t *testing.T) {
 }
 
 func TestPublishToNonexistent(t *testing.T) {
-	hub := &Hub{}
+	hub := &Hub[string]{}
 	hub.Init()
 	
 	err := hub.PublishTo("job:1", "Hello Mike")
@@ -195,7 +195,7 @@ func TestPublishToNonexistent(t *testing.T) {
 }
 
 func TestListenMissedSubscription(t *testing.T) {
-	hub := &Hub{}
+	hub := &Hub[string]{}
 	hub.Init()
 
 	g1 := make(chan Empty)
@@ -265,14 +265,14 @@ func TestListenMissedSubscription(t *testing.T) {
 	}()
 
 	<-g2
-	hub.CommandCh <- HubCommand{CmdType: HubCmdShutdown}
+	hub.CommandCh <- HubCommand[string]{CmdType: HubCmdShutdown}
 	
 	<-g1
 	<-g3
 }
 
 func TestListen(t *testing.T) {
-	hub := &Hub{}
+	hub := &Hub[string]{}
 	hub.Init()
 
 	g1 := make(chan Empty)
@@ -332,7 +332,7 @@ func TestListen(t *testing.T) {
 	}()
 	
 	<-jobDone
-	hub.CommandCh <- HubCommand{CmdType: HubCmdShutdown}
+	hub.CommandCh <- HubCommand[string]{CmdType: HubCmdShutdown}
 	
 	<-g1
 	<-g3
@@ -340,13 +340,13 @@ func TestListen(t *testing.T) {
 	assert.Empty(t, hub.Subscribers)
 }
 
-func typicalClient(t *testing.T, hub *Hub, jobContinue chan<- Empty, expectedReads []string, exitCh chan<- Empty) {	
+func typicalClient[T Sendable](t *testing.T, hub *Hub[T], jobContinue chan<- Empty, expectedReads []string, exitCh chan<- Empty) {	
 	cli, err := hub.Subscribe("job:1")
 	assert.Nil(t, err)
 
 	jobContinue <- Em
 
-	messages := []string{}
+	messages := []T{}
 	for {
 		cli.ClientPing()
 		if m, ok := <- cli.MsgCh; ok {
@@ -362,7 +362,7 @@ func typicalClient(t *testing.T, hub *Hub, jobContinue chan<- Empty, expectedRea
 }
 
 func TestListen2Clients(t *testing.T) {
-	hub := &Hub{}
+	hub := &Hub[string]{}
 	hub.Init()
 
 	g1 := make(chan Empty)
@@ -398,7 +398,7 @@ func TestListen2Clients(t *testing.T) {
 	go typicalClient(t, hub, jobContinue, []string{"Hello Mike", "Hello Carol"}, g4)
 
 	<-jobThread
-	hub.CommandCh <- HubCommand{CmdType: HubCmdShutdown}
+	hub.CommandCh <- HubCommand[string]{CmdType: HubCmdShutdown}
 	
 	<-g1
 	<-g3
@@ -410,7 +410,7 @@ func TestListen2Clients(t *testing.T) {
 // missing some published messages.
 //
 func TestClientExitsEarly(t *testing.T) {
-	hub := &Hub{}
+	hub := &Hub[string]{}
 	hub.Init()
 
 	g1 := make(chan Empty)
@@ -469,7 +469,7 @@ func TestClientExitsEarly(t *testing.T) {
 
 
 	<-jobThread
-	hub.CommandCh <- HubCommand{CmdType: HubCmdShutdown}
+	hub.CommandCh <- HubCommand[string]{CmdType: HubCmdShutdown}
 	
 	<-g1
 	<-g3
@@ -481,7 +481,7 @@ func TestClientExitsEarly(t *testing.T) {
 // Scenario of client exiting early, right before a subscription is removed.
 //
 func TestClientExitsEarly2(t *testing.T) {
-	hub := &Hub{}
+	hub := &Hub[string]{}
 	hub.Init()
 
 	g1 := make(chan Empty)
@@ -539,7 +539,7 @@ func TestClientExitsEarly2(t *testing.T) {
 	}()
 	
 	<-jobThread
-	hub.CommandCh <- HubCommand{CmdType: HubCmdShutdown}
+	hub.CommandCh <- HubCommand[string]{CmdType: HubCmdShutdown}
 	
 	<-g1
 	<-g3
@@ -547,7 +547,7 @@ func TestClientExitsEarly2(t *testing.T) {
 	<-g5	
 }
 
-func hastyExitingClient(t *testing.T, hub *Hub, expectedMsg string, jobContinue chan<- Empty, exitCh chan<- Empty) {
+func hastyExitingClient[T Sendable](t *testing.T, hub *Hub[T], expectedMsg string, jobContinue chan<- Empty, exitCh chan<- Empty) {
 	cli, err := hub.Subscribe("job:1")
 	assert.Nil(t, err)
 
@@ -559,7 +559,7 @@ func hastyExitingClient(t *testing.T, hub *Hub, expectedMsg string, jobContinue 
 	assert.Equal(t, expectedMsg, m)
 	cli.Close()
 	
-	removeCmd := HubCommand{CmdType: HubCmdRemoveSubscriber, Subscription: "job:1", SubscriberId: cli.Id}
+	removeCmd := HubCommand[T]{CmdType: HubCmdRemoveSubscriber, Subscription: "job:1", SubscriberId: cli.Id}
 	select {
 	case hub.CommandCh <- removeCmd:
 	default:
@@ -574,7 +574,7 @@ func hastyExitingClient(t *testing.T, hub *Hub, expectedMsg string, jobContinue 
 // I don't know how to force this though.
 //
 func TestClientExitEarlyHasty(t *testing.T) {
-	hub := &Hub{}
+	hub := &Hub[string]{}
 	hub.Init()
 
 	g1 := make(chan Empty)
@@ -637,7 +637,7 @@ func TestClientExitEarlyHasty(t *testing.T) {
 	<-jobThread
 	<-g4
 	
-	hub.CommandCh <- HubCommand{CmdType: HubCmdShutdown}
+	hub.CommandCh <- HubCommand[string]{CmdType: HubCmdShutdown}
 
 	<-g1
 	<-g3
@@ -648,7 +648,7 @@ func TestClientExitEarlyHasty(t *testing.T) {
 // will succeed in being pushed.
 //
 func TestClientExitEarlyHasty2(t *testing.T) {
-	hub := &Hub{CommandChSize: 100}
+	hub := &Hub[string]{CommandChSize: 100}
 	hub.Init()
 
 	g1 := make(chan Empty)
@@ -713,7 +713,7 @@ func TestClientExitEarlyHasty2(t *testing.T) {
 
 	<-jobThread
 	
-	hub.CommandCh <- HubCommand{CmdType: HubCmdShutdown}
+	hub.CommandCh <- HubCommand[string]{CmdType: HubCmdShutdown}
 
 	<-g1
 	<-g3

@@ -14,42 +14,52 @@ const (
 	HubCmdRemoveSubscriber = 3
 )
 
-type HubChannel struct {
+type JobStatus struct {
+	Type string        `json:"type"`
+	Complete float64   `json:"percentComplete"`
+	Message string     `json:"message"`
+}
+
+type Sendable interface {
+	string | JobStatus
+}
+
+type HubChannel[T Sendable] struct {
 	Id string
 	ClientPings chan Empty
-	MsgCh chan string
+	MsgCh chan T
 }
 
 type HubSubscription struct {
 	Name string     `json:"name"`
 }
 
-type HubCommand struct {
+type HubCommand[T Sendable] struct {
 	CmdType int
 	Subscription string
-	Message string
+	Message T
 	SubscriberId string
 }
 
-type Hub struct {
+type Hub[T Sendable] struct {
 	Ids map[string]bool
-	Subscribers map[string][]*HubChannel
+	Subscribers map[string][]*HubChannel[T]
 	Subscriptions map[string]*HubSubscription
 	CommandChSize int
-	CommandCh chan HubCommand
+	CommandCh chan HubCommand[T]
 	Lock *ReadWriteLock
 }
 
-func (hCh *HubChannel) Init() {
+func (hCh *HubChannel[T]) Init() {
 	hCh.ClientPings = make(chan Empty)
-	hCh.MsgCh = make(chan string)
+	hCh.MsgCh = make(chan T)
 }
 
 //
 // Hub Listen() should check this to see if client has sent
 // a ping and is ready for a message.
 //
-func (hCh *HubChannel) IsClientAlive() bool {
+func (hCh *HubChannel[T]) IsClientAlive() bool {
 	_, ok := <-hCh.ClientPings
 	return ok
 }
@@ -57,7 +67,7 @@ func (hCh *HubChannel) IsClientAlive() bool {
 //
 // Clients should close the connection, indicating they're done reading.
 //
-func (hCh *HubChannel) Close() {
+func (hCh *HubChannel[T]) Close() {
 	close(hCh.ClientPings)
 }
 
@@ -65,20 +75,20 @@ func (hCh *HubChannel) Close() {
 // Clients should send this to indicate they want a message,
 // or done indicator.
 //
-func (hCh *HubChannel) ClientPing() {
+func (hCh *HubChannel[T]) ClientPing() {
 	hCh.ClientPings <- Empty{}
 }
 
-func (h *Hub) Init() {
+func (h *Hub[T]) Init() {
 	h.Ids = make(map[string]bool)
-	h.Subscribers = make(map[string][]*HubChannel)
+	h.Subscribers = make(map[string][]*HubChannel[T])
 	h.Subscriptions = make(map[string]*HubSubscription)
-	h.CommandCh = make(chan HubCommand, h.CommandChSize)
+	h.CommandCh = make(chan HubCommand[T], h.CommandChSize)
 	h.Lock = &ReadWriteLock{}
 	h.Lock.Init()
 }
 
-func (h *Hub) CreateSubscription(name string) (*HubSubscription, error) {
+func (h *Hub[T]) CreateSubscription(name string) (*HubSubscription, error) {
 	h.Lock.LockForWriting()
 
 	if _, ok := h.Subscriptions[name]; ok {
@@ -93,14 +103,14 @@ func (h *Hub) CreateSubscription(name string) (*HubSubscription, error) {
 	return next, nil
 }
 
-func (h *Hub) GetSubscription(name string) *HubSubscription {
+func (h *Hub[T]) GetSubscription(name string) *HubSubscription {
 	h.Lock.LockForReading()
 	sub := h.Subscriptions[name]
 	h.Lock.ReadingUnlock()
 	return sub
 }
 
-func (h *Hub) GetSubscriptions() []*HubSubscription {
+func (h *Hub[T]) GetSubscriptions() []*HubSubscription {
 	h.Lock.LockForReading()
 	ret := []*HubSubscription{}
 	for _, sub := range h.Subscriptions {
@@ -110,7 +120,7 @@ func (h *Hub) GetSubscriptions() []*HubSubscription {
 	return ret
 }
 
-func (h *Hub) Subscribe(name string) (*HubChannel, error) {
+func (h *Hub[T]) Subscribe(name string) (*HubChannel[T], error) {
 	h.Lock.LockForWriting()
 	
 	if _, ok := h.Subscriptions[name]; !ok {
@@ -119,7 +129,7 @@ func (h *Hub) Subscribe(name string) (*HubChannel, error) {
 	}
 
 	if _, ok := h.Subscribers[name]; !ok {
-		h.Subscribers[name] = []*HubChannel{}
+		h.Subscribers[name] = []*HubChannel[T]{}
 	}
 
 	nextUUID := uuid.New()
@@ -129,7 +139,7 @@ func (h *Hub) Subscribe(name string) (*HubChannel, error) {
 	}
 
 	h.Ids[nextUUID.String()] = true
-	next := &HubChannel{Id: nextUUID.String()}
+	next := &HubChannel[T]{Id: nextUUID.String()}
 	next.Init()
 	h.Subscribers[name] = append(h.Subscribers[name], next)
 
@@ -137,14 +147,14 @@ func (h *Hub) Subscribe(name string) (*HubChannel, error) {
 	return next, nil
 }
 
-func (h *Hub) SubscribersFor(name string) []*HubChannel {
+func (h *Hub[T]) SubscribersFor(name string) []*HubChannel[T] {
 	h.Lock.LockForReading()
 	if _, ok := h.Subscribers[name]; !ok {
 		h.Lock.ReadingUnlock()
-		return []*HubChannel{}
+		return []*HubChannel[T]{}
 	}
 
-	cpy := append([]*HubChannel{}, h.Subscribers[name]...)
+	cpy := append([]*HubChannel[T]{}, h.Subscribers[name]...)
 	h.Lock.ReadingUnlock()
 	return cpy
 }
@@ -154,7 +164,7 @@ func (h *Hub) SubscribersFor(name string) []*HubChannel {
 // require a lock and slow things down. If the subscription does not
 // exist, the subcribers list will come back empty, and nothing will happen.
 //
-func (h *Hub) PublishTo(name string, message string) error {
+func (h *Hub[T]) PublishTo(name string, message T) error {
 	h.Lock.LockForReading()
 	
 	if _, ok := h.Subscriptions[name]; !ok {
@@ -164,11 +174,11 @@ func (h *Hub) PublishTo(name string, message string) error {
 
 	h.Lock.ReadingUnlock()
 	// fmt.Printf("PublishTo(): Sending into activity %p\n", h.CommandCh)
-	h.CommandCh <- HubCommand{CmdType: HubCmdMessage, Subscription: name, Message: message}
+	h.CommandCh <- HubCommand[T]{CmdType: HubCmdMessage, Subscription: name, Message: message}
 	return nil
 }
 
-func (h *Hub) removeSubscription(name string, alreadyLocked bool) error {
+func (h *Hub[T]) removeSubscription(name string, alreadyLocked bool) error {
 	if !alreadyLocked {
 		h.Lock.LockForWriting()
 	}
@@ -198,7 +208,7 @@ func (h *Hub) removeSubscription(name string, alreadyLocked bool) error {
 	return nil
 }
 
-func (h *Hub) removeAllSubscriptions() {
+func (h *Hub[T]) removeAllSubscriptions() {
 	h.Lock.LockForWriting()
 
 	for name, _ := range h.Subscriptions {
@@ -211,7 +221,7 @@ func (h *Hub) removeAllSubscriptions() {
 	h.Lock.WritingUnlock()
 }
 
-func (h *Hub) RemoveSubscription(name string) error {
+func (h *Hub[T]) RemoveSubscription(name string) error {
 	h.Lock.LockForReading()
 	
 	if _, ok := h.Subscriptions[name]; !ok {
@@ -220,12 +230,12 @@ func (h *Hub) RemoveSubscription(name string) error {
 	}
 
 	h.Lock.ReadingUnlock()
-	h.CommandCh <- HubCommand{CmdType: HubCmdRemoveSub, Subscription: name}
+	h.CommandCh <- HubCommand[T]{CmdType: HubCmdRemoveSub, Subscription: name}
 
 	return nil
 }
 
-func (h *Hub) Listen() {
+func (h *Hub[T]) Listen() {
 	Loop:
 	for {
 		// fmt.Printf("Listen(): reading an activity %p\n", h.CommandCh)
@@ -269,7 +279,7 @@ func (h *Hub) Listen() {
 	h.removeAllSubscriptions()
 }
 
-func (h *Hub) removeSubscriber(name string, id string) error {
+func (h *Hub[T]) removeSubscriber(name string, id string) error {
 	h.Lock.LockForWriting()
 	
 	if _, ok := h.Subscriptions[name]; !ok {
