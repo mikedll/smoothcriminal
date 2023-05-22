@@ -151,8 +151,9 @@ func runJob(jobId int) {
 		log.Fatalf("Unable to parse duration: %s\n", err)
 	}
 
-	for i := 0; i < 15; i++ {
+	for i := 1; i <= 15; i++ {
 		time.Sleep(pause)
+		hub.PublishTo(jobStr, pkg.JobStatus{Type: "complete", Complete: float64(i)/15.0})
 		hub.PublishTo(jobStr, pkg.JobStatus{Type: "message", Message: fmt.Sprintf("Part %d\n", i)})
 	}
 	

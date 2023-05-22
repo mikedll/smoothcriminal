@@ -43,43 +43,49 @@ const subscriptions = () => {
 
 const webSocket = () => {
   const container = document.querySelector('.job-container');
+  
+  if(container === null) 
+    return;
+    
+  const messages = container.querySelector('.messages')!;
+  const progressBar: HTMLDivElement = container.querySelector('.progress-bar')!;
 
-  if(container !== null) {
-    const addMessage = (m: string) => {
-      const div = document.createElement("div");
-      div.appendChild(document.createTextNode(m));
-      container.appendChild(div);
-    }
-
-    const pathRegexp = RegExp("/jobs/(\\d+)")
-    const matches = location.pathname.match(pathRegexp);
-    if(matches === null) {
-      addMessage(`Unable to parse path from: ${location.pathname}`);
-      return;
-    }
-
-    const ws = new WebSocket(`ws://localhost:8081/jobs/${matches[1]}/stream`);
-
-    ws.addEventListener("open", (event) => {
-      addMessage("Web socket connection opened");
-    });
-
-    ws.addEventListener("message", (event) => {
-      const jobStatus: MessageJobStatus | PercentJobStatus = JSON.parse(event.data);
-      switch(jobStatus.type) {
-        case "message":
-          addMessage(jobStatus.message);
-          break;
-        case "complete":
-          addMessage(`Percent: ${jobStatus.percentComplete}`);
-          break;
-      }
-    });
-
-    ws.addEventListener("close", (event) => {
-      addMessage("Web socket connection closed.");
-    });
+  const addMessage = (m: string) => {
+    const div = document.createElement("div");
+    div.appendChild(document.createTextNode(m));
+    messages.appendChild(div);
   }
+
+  const pathRegexp = RegExp("/jobs/(\\d+)")
+  const matches = location.pathname.match(pathRegexp);
+  if(matches === null) {
+    addMessage(`Unable to parse path from: ${location.pathname}`);
+    return;
+  }
+
+  const ws = new WebSocket(`ws://localhost:8081/jobs/${matches[1]}/stream`);
+
+  ws.addEventListener("open", (event) => {
+    addMessage("Web socket connection opened");
+  });
+
+  ws.addEventListener("message", (event) => {
+    const jobStatus: MessageJobStatus | PercentJobStatus = JSON.parse(event.data);
+    switch(jobStatus.type) {
+      case "message":
+        addMessage(jobStatus.message);
+        break;
+      case "complete":
+        const wholeNum = Math.round(jobStatus.percentComplete * 100);
+        console.log("maints webSocket wholeNum", jobStatus.percentComplete, wholeNum);
+        progressBar.style.width = `${wholeNum}%`;
+        break;
+    }
+  });
+
+  ws.addEventListener("close", (event) => {
+    addMessage("Web socket connection closed.");
+  });
 };
 
 document.addEventListener("DOMContentLoaded", () => {
