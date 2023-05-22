@@ -114,7 +114,7 @@ func streamJob(w http.ResponseWriter, r *http.Request) {
 	for {
 		cli.ClientPing()
 		if m, ok := <- cli.MsgCh; ok {
-			
+
 			err := outConn.WriteMessage(websocket.TextMessage, []byte(m))
 			if err != nil {
 				fmt.Printf("Unable to write message: %s\n", err)
@@ -123,9 +123,11 @@ func streamJob(w http.ResponseWriter, r *http.Request) {
 				removeCmd := pkg.HubCommand{CmdType: pkg.HubCmdRemoveSubscriber, Subscription: jobStr, SubscriberId: cli.Id}
 				select {
 				case hub.CommandCh <- removeCmd:
+					break
 				default:
 				}
 			}
+			// fmt.Printf("Wrote a message: %s", m)
 		} else {
 			// Subscription was closed
 			break
@@ -144,23 +146,16 @@ func runJob(jobId int) {
 
 	fmt.Printf("Created subscription: %s\n", jobStr)
 
-	pause, err := time.ParseDuration("1s")
+	pause, err := time.ParseDuration("500ms")
 	if err != nil {
 		log.Fatalf("Unable to parse duration: %s\n", err)
 	}
 
-	time.Sleep(pause)
-	hub.PublishTo(jobStr, "Hello 1")
+	for i := 0; i < 15; i++ {
+		time.Sleep(pause)
+		hub.PublishTo(jobStr, fmt.Sprintf("Part %d\n", i))
+	}
 	
-	time.Sleep(pause)
-	hub.PublishTo(jobStr, "Hello 2")
-	
-	time.Sleep(pause)
-	hub.PublishTo(jobStr, "Hello 3")
-	
-	time.Sleep(pause)
-	hub.PublishTo(jobStr, "Hello 4")
-
 	hub.RemoveSubscription(jobStr)
 }
 
