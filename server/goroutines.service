@@ -12,8 +12,8 @@ Type=simple
 Restart=always
 RestartSec=3
 User=mrmike
-WorkingDirectory=/home/mrmike/smoothcriminal
-ExecStart=/home/mrmike/smoothcriminal/bin/smoothcriminal
+WorkingDirectory=/home/mrmike/apps/smoothcriminal
+ExecStart=/home/mrmike/apps/smoothcriminal/bin/smoothcriminal
 
 [Install]
 WantedBy=multi-user.target
